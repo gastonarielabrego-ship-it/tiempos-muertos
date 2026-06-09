@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ScanRecord {
+  id        Int      @id @default(autoincrement())
+  codUti    String
+  nomUti    String
+  fecha     DateTime
+  hora      String
+  codAct    Int
+  zonSts    String?
+  allSts    Int
+  dplSts    Int
+  nivSts    Int
+  codPro    String
+  pcbPro    Int
+  bultos    Int
+  createdAt DateTime @default(now())
+
+  @@index([codUti, fecha])
+  @@index([fecha])
+  @@index([zonSts])
+  @@index([codAct])
+}
