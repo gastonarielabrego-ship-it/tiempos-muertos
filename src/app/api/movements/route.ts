@@ -2,23 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 
-const DEAD_TIME_THRESHOLD = 300; // 5 minutos
+const DEAD_TIME_THRESHOLD = 300;
 
 type Turno = 'TM' | 'TT' | 'TN';
 
 function getTurno(hora: string): Turno {
   const parts = hora.split(':').map(Number);
   const totalMin = parts[0] * 60 + parts[1];
-  if (totalMin < 6 * 60) return 'TN';   // antes de 6 AM
-  if (totalMin < 10 * 60) return 'TM';  // 6 AM a 10 AM
-  if (totalMin < 18 * 60) return 'TT';  // 10 AM a 18 PM
-  return 'TN';                           // 18 PM en adelante
+  if (totalMin < 6 * 60) return 'TN';
+  if (totalMin < 10 * 60) return 'TM';
+  if (totalMin < 18 * 60) return 'TT';
+  return 'TN';
 }
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const operator = searchParams.get('operator') || 'all';
+    const turnoFilter = searchParams.get('turno');
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '100');
 
@@ -66,8 +67,10 @@ export async function GET(request: NextRequest) {
     let totalDeadTimeSec = 0;
 
     for (const [, dayScans] of grouped) {
-      // Determine shift from first scan of the day
       const turno: Turno = getTurno(dayScans[0].hora);
+
+      // Skip if turno filter doesn't match
+      if (turnoFilter && turno !== turnoFilter) continue;
 
       for (let i = 1; i < dayScans.length; i++) {
         const prev = dayScans[i - 1];
@@ -100,7 +103,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Sort by gap descending (ranking)
     gaps.sort((a, b) => b.gapSeconds - a.gapSeconds);
     gaps.forEach((g, i) => { g.rank = i + 1; });
 

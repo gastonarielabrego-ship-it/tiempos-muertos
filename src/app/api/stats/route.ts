@@ -9,16 +9,17 @@ type Turno = 'TM' | 'TT' | 'TN';
 function getTurno(hora: string): Turno {
   const parts = hora.split(':').map(Number);
   const totalMin = parts[0] * 60 + parts[1];
-  if (totalMin < 6 * 60) return 'TN';   // antes de 6 AM
-  if (totalMin < 10 * 60) return 'TM';  // 6 AM a 10 AM
-  if (totalMin < 18 * 60) return 'TT';  // 10 AM a 18 PM
-  return 'TN';                           // 18 PM en adelante
+  if (totalMin < 6 * 60) return 'TN';
+  if (totalMin < 10 * 60) return 'TM';
+  if (totalMin < 18 * 60) return 'TT';
+  return 'TN';
 }
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const operator = searchParams.get('operator');
+    const turnoFilter = searchParams.get('turno'); // TM, TT, TN, or null
 
     const where: Prisma.ScanRecordWhereInput = {};
     if (operator) where.codUti = operator;
@@ -49,7 +50,6 @@ export async function GET(request: NextRequest) {
     let maxGap = 0;
     let deadTimeGapSum = 0;
 
-    // Shift breakdown
     const shiftData: Record<Turno, { sec: number; events: number }> = {
       TM: { sec: 0, events: 0 },
       TT: { sec: 0, events: 0 },
@@ -61,10 +61,12 @@ export async function GET(request: NextRequest) {
       turnos: Record<Turno, number>;
     }>();
 
-    for (const [groupKey, dayScans] of grouped) {
-      // Determine shift from first scan of the day
+    for (const [, dayScans] of grouped) {
       const firstScan = dayScans[0];
       const turno: Turno = getTurno(firstScan.hora);
+
+      // Skip this group if turno filter is set and doesn't match
+      if (turnoFilter && turno !== turnoFilter) continue;
 
       for (let i = 1; i < dayScans.length; i++) {
         const prev = dayScans[i - 1];
@@ -98,7 +100,6 @@ export async function GET(request: NextRequest) {
 
     const byOperator = Array.from(opMap.entries())
       .map(([cod, d]) => {
-        // Predominant shift = the one with most dead seconds
         const predTurno: Turno = (['TM', 'TT', 'TN'] as Turno[]).sort(
           (a, b) => d.turnos[b] - d.turnos[a]
         )[0];
