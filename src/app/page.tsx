@@ -3,16 +3,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import * as echarts from 'echarts/core';
-import { BarChart, PieChart, LineChart, HeatmapChart } from 'echarts/charts';
-import {
-  GridComponent, TooltipComponent, TitleComponent,
-  LegendComponent, DataZoomComponent, VisualMapComponent,
-} from 'echarts/components';
+import { BarChart } from 'echarts/charts';
+import { GridComponent, TooltipComponent, DataZoomComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -20,142 +15,81 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  Upload, RefreshCw, Clock, Users, Activity, AlertTriangle,
-  TrendingUp, Zap, BarChart3, Filter, FileSpreadsheet, Loader2,
-  Database, Timer, ChevronUp, ChevronDown, X,
+  Upload, RefreshCw, Clock, BarChart3, AlertTriangle,
+  TrendingUp, Loader2, Database, Timer, ChevronLeft, ChevronRight,
+  X, ArrowDown,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-echarts.use([
-  BarChart, PieChart, LineChart, HeatmapChart,
-  GridComponent, TooltipComponent, TitleComponent,
-  LegendComponent, DataZoomComponent, VisualMapComponent,
-  CanvasRenderer,
-]);
+echarts.use([BarChart, GridComponent, TooltipComponent, DataZoomComponent, CanvasRenderer]);
 
 // --- Types ---
 interface KPIs {
   totalScans: number;
   totalDeadTime: number;
-  avgDeadTime: number;
-  maxDeadTime: number;
-  operatorsCount: number;
+  deadTimeEvents: number;
+  avgGap: number;
+  maxGap: number;
 }
 
-interface OperatorStat {
+interface OpStat {
   codUti: string;
   nomUti: string;
   totalMin: number;
-  avgSec: number;
-  maxSec: number;
-  gaps: number;
+  events: number;
+  maxGap: number;
 }
 
-interface RangeStat {
-  label: string;
-  min: number;
-  max: number;
-  count: number;
-  pct: number;
-}
-
-interface HourStat {
-  hour: number;
-  label: string;
-  avgSec: number;
-  count: number;
-  totalMin: number;
-}
-
-interface ZoneStat {
-  zone: string;
-  totalMin: number;
-  avgSec: number;
-  count: number;
-}
-
-interface ActivityStat {
-  activity: number;
-  totalMin: number;
-  avgSec: number;
-  count: number;
-}
-
-interface TopGap {
-  nomUti: string;
+interface MovementRow {
+  id: number;
   codUti: string;
+  nomUti: string;
   fecha: string;
-  prevHora: string;
   hora: string;
-  gapSeconds: number;
-  gapFormatted: string;
-  zona: string | null;
+  codAct: number;
+  zonSts: string | null;
+  allSts: number;
+  dplSts: number;
+  nivSts: number;
+  codPro: string;
+  pcbPro: number;
+  bultos: number;
+  gapSeconds: number | null;
+  isDeadTime: boolean;
 }
 
 interface Filters {
-  dates: string[];
   operators: { codUti: string; nomUti: string }[];
-  zones: string[];
-  activities: number[];
   totalRecords: number;
 }
 
-interface StatsData {
-  kpis: KPIs;
-  byOperator: OperatorStat[];
-  byRange: RangeStat[];
-  byHour: HourStat[];
-  byZone: ZoneStat[];
-  byActivity: ActivityStat[];
-  topGaps: TopGap[];
+function fmtDur(s: number): string {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m}m ${sec}s`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
 }
 
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
-// --- KPI Card Component ---
-function KPICard({
-  title, value, subtitle, icon: Icon, color, subValue,
-}: {
-  title: string; value: string; subtitle: string;
-  icon: React.ElementType; color: string; subValue?: string;
-}) {
-  return (
-    <Card className="relative overflow-hidden">
-      <CardContent className="p-4 sm:p-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-xs sm:text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="text-xl sm:text-3xl font-bold tracking-tight">{value}</p>
-            {subValue && (
-              <p className="text-xs text-muted-foreground">{subValue}</p>
-            )}
-            <p className="text-xs text-muted-foreground/70">{subtitle}</p>
-          </div>
-          <div className={`rounded-lg p-2 sm:p-3 ${color}`}>
-            <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+function fmtGap(s: number | null): string {
+  if (s === null) return '—';
+  return fmtDur(s);
 }
 
 // --- Main Page ---
 export default function DashboardPage() {
-  const [stats, setStats] = useState<StatsData | null>(null);
+  const [stats, setStats] = useState<{ kpis: KPIs; byOperator: OpStat[] } | null>(null);
   const [filters, setFilters] = useState<Filters | null>(null);
+  const [movements, setMovements] = useState<MovementRow[]>([]);
+  const [movSummary, setMovSummary] = useState<{ totalDeadTimeSec: number; totalDeadTimeFormatted: string; deadTimeCount: number } | null>(null);
+  const [movPage, setMovPage] = useState(1);
+  const [movTotalPages, setMovTotalPages] = useState(1);
+  const [movTotal, setMovTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [movLoading, setMovLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [selectedOp, setSelectedOp] = useState<string>('all');
-  const [selectedZone, setSelectedZone] = useState<string>('all');
-  const [selectedAct, setSelectedAct] = useState<string>('all');
   const [hasData, setHasData] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -166,11 +100,8 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error();
       const data: Filters = await res.json();
       setFilters(data);
-      if (data.totalRecords === 0) setHasData(false);
-      else setHasData(true);
-    } catch {
-      console.error('Error fetching filters');
-    }
+      setHasData(data.totalRecords > 0);
+    } catch { /* silent */ }
   }, []);
 
   const fetchStats = useCallback(async () => {
@@ -178,562 +109,352 @@ export default function DashboardPage() {
     try {
       const params = new URLSearchParams();
       if (selectedOp !== 'all') params.set('operator', selectedOp);
-      if (selectedZone !== 'all') params.set('zone', selectedZone);
-      if (selectedAct !== 'all') params.set('activity', selectedAct);
-      const res = await fetch(`/api/stats?${params.toString()}`);
+      const res = await fetch(`/api/stats?${params}`);
       if (!res.ok) throw new Error();
-      const data: StatsData = await res.json();
+      const data = await res.json();
       setStats(data);
     } catch {
       toast({ title: 'Error', description: 'No se pudieron cargar las estadísticas', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
-  }, [selectedOp, selectedZone, selectedAct, toast]);
+  }, [selectedOp, toast]);
+
+  const fetchMovements = useCallback(async (page: number) => {
+    setMovLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('page', String(page));
+      params.set('pageSize', '200');
+      if (selectedOp !== 'all') params.set('operator', selectedOp);
+      const res = await fetch(`/api/movements?${params}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setMovements(data.rows);
+      setMovSummary(data.summary);
+      setMovPage(data.pagination.page);
+      setMovTotalPages(data.pagination.totalPages);
+      setMovTotal(data.pagination.total);
+    } catch {
+      toast({ title: 'Error', description: 'No se pudieron cargar los movimientos', variant: 'destructive' });
+    } finally {
+      setMovLoading(false);
+    }
+  }, [selectedOp, toast]);
+
+  useEffect(() => { fetchFilters(); }, [fetchFilters]);
 
   useEffect(() => {
-    fetchFilters();
-  }, [fetchFilters]);
+    if (hasData) { fetchStats(); fetchMovements(1); }
+    else { setLoading(false); setMovLoading(false); }
+  }, [fetchStats, fetchMovements, hasData]);
 
-  useEffect(() => {
-    if (hasData) fetchStats();
-    else setLoading(false);
-  }, [fetchStats, hasData]);
+  const handleOpChange = (val: string) => {
+    setSelectedOp(val);
+    setMovPage(1);
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      toast({ title: 'Datos actualizados', description: data.message || `${data.totalRecords} registros cargados` });
+      toast({ title: 'Datos actualizados', description: `${data.totalRecords} registros cargados` });
       setHasData(true);
       setSelectedOp('all');
-      setSelectedZone('all');
-      setSelectedAct('all');
       await fetchFilters();
     } catch (err) {
-      toast({
-        title: 'Error al cargar',
-        description: err instanceof Error ? err.message : 'Error desconocido',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error al cargar', description: err instanceof Error ? err.message : 'Error desconocido', variant: 'destructive' });
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  const activeFilters = (selectedOp !== 'all' ? 1 : 0) + (selectedZone !== 'all' ? 1 : 0) + (selectedAct !== 'all' ? 1 : 0);
-
-  // --- ECharts Options ---
-  const operatorBarOption: echarts.EChartsOption = stats ? {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: '3%', right: '4%', bottom: '15%', top: '8%', containLabel: true },
+  // EChart: dead time by operator
+  const chartOption: echarts.EChartsOption = stats && stats.byOperator.length > 0 ? {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: (params: unknown) => {
+      const p = params as { name: string; value: number; seriesName: string }[];
+      if (!p || !p[0]) return '';
+      const op = stats.byOperator.find(o => o.nomUti.split(' ').slice(-2).join(' ') === p[0].name);
+      return `<b>${p[0].name}</b><br/>Tiempo muerto: ${p[0].value} min<br/>Eventos: ${op?.events || 0}<br/>Máximo: ${op ? fmtDur(op.maxGap) : ''}`;
+    }},
+    grid: { left: '3%', right: '4%', bottom: '18%', top: '5%', containLabel: true },
     dataZoom: [{ type: 'slider', start: 0, end: 100, height: 20 }],
     xAxis: {
       type: 'category',
       data: stats.byOperator.map(o => o.nomUti.split(' ').slice(-2).join(' ')),
       axisLabel: { rotate: 45, fontSize: 10 },
     },
-    yAxis: { type: 'value', name: 'Minutos', nameLocation: 'middle', nameGap: 45 },
-    series: [
-      {
-        name: 'Tiempo Muerto Total',
-        type: 'bar',
-        data: stats.byOperator.map(o => o.totalMin),
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#f97316' },
-            { offset: 1, color: '#fb923c' },
-          ]),
-          borderRadius: [4, 4, 0, 0],
-        },
-        emphasis: { itemStyle: { color: '#ea580c' } },
-      },
-      {
-        name: 'Promedio (s)',
-        type: 'bar',
-        data: stats.byOperator.map(o => o.avgSec),
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#38bdf8' },
-            { offset: 1, color: '#7dd3fc' },
-          ]),
-          borderRadius: [4, 4, 0, 0],
-        },
-      },
-    ],
-    legend: { data: ['Tiempo Muerto Total', 'Promedio (s)'], bottom: 0 },
-  } : {};
-
-  const rangePieOption: echarts.EChartsOption = stats ? {
-    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { orient: 'vertical', right: '5%', top: 'center', textStyle: { fontSize: 11 } },
-    series: [{
-      type: 'pie',
-      radius: ['35%', '65%'],
-      center: ['35%', '50%'],
-      avoidLabelOverlap: true,
-      itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
-      label: { show: false },
-      emphasis: { label: { show: true, fontSize: 13, fontWeight: 'bold' } },
-      data: stats.byRange.map((r, i) => ({
-        name: r.label,
-        value: r.count,
-        itemStyle: {
-          color: ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444', '#dc2626', '#991b1b', '#7f1d1d'][i],
-        },
-      })),
-    }],
-  } : {};
-
-  const hourLineOption: echarts.EChartsOption = stats ? {
-    tooltip: { trigger: 'axis' },
-    grid: { left: '3%', right: '4%', bottom: '10%', top: '12%', containLabel: true },
-    xAxis: {
-      type: 'category',
-      data: stats.byHour.map(h => h.label),
-      axisLabel: { fontSize: 10 },
-    },
-    yAxis: [
-      { type: 'value', name: 'Promedio (s)', position: 'left' },
-      { type: 'value', name: 'Total (min)', position: 'right' },
-    ],
-    series: [
-      {
-        name: 'Promedio (s)',
-        type: 'line',
-        data: stats.byHour.map(h => h.avgSec),
-        smooth: true,
-        lineStyle: { width: 3, color: '#f97316' },
-        itemStyle: { color: '#f97316' },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(249,115,22,0.3)' },
-            { offset: 1, color: 'rgba(249,115,22,0.02)' },
-          ]),
-        },
-      },
-      {
-        name: 'Total (min)',
-        type: 'bar',
-        yAxisIndex: 1,
-        data: stats.byHour.map(h => h.totalMin),
-        itemStyle: { color: 'rgba(56,189,248,0.4)', borderRadius: [3, 3, 0, 0] },
-        barWidth: '40%',
-      },
-    ],
-    legend: { data: ['Promedio (s)', 'Total (min)'], bottom: 0 },
-  } : {};
-
-  const zoneBarOption: echarts.EChartsOption = stats ? {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: '3%', right: '4%', bottom: '10%', top: '8%', containLabel: true },
-    xAxis: {
-      type: 'category',
-      data: stats.byZone.map(z => `Zona ${z.zone}`),
-    },
-    yAxis: { type: 'value', name: 'Minutos' },
+    yAxis: { type: 'value', name: 'Minutos (>5 min)', nameLocation: 'middle', nameGap: 50 },
     series: [{
       type: 'bar',
-      data: stats.byZone.map((z, i) => ({
-        value: z.totalMin,
-        itemStyle: {
-          color: ['#22c55e', '#38bdf8', '#f97316', '#a855f7', '#ef4444', '#eab308', '#6366f1'][i % 7],
-          borderRadius: [4, 4, 0, 0],
-        },
-      })),
-    }],
-  } : {};
-
-  const activityBarOption: echarts.EChartsOption = stats ? {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: '3%', right: '4%', bottom: '10%', top: '8%', containLabel: true },
-    xAxis: {
-      type: 'category',
-      data: stats.byActivity.map(a => `Actividad ${a.activity}`),
-    },
-    yAxis: { type: 'value', name: 'Minutos' },
-    series: [{
-      type: 'bar',
-      data: stats.byActivity.map(a => a.totalMin),
+      data: stats.byOperator.map(o => o.totalMin),
       itemStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: '#a855f7' },
-          { offset: 1, color: '#c084fc' },
-        ]),
+        color: (params: unknown) => {
+          const p = params as { dataIndex: number };
+          const op = stats.byOperator[p.dataIndex];
+          return op && op.totalMin > 30 ? '#ef4444' : op && op.totalMin > 15 ? '#f97316' : '#eab308';
+        },
         borderRadius: [4, 4, 0, 0],
       },
     }],
   } : {};
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen flex flex-col bg-slate-50">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b bg-white/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500 to-red-500">
-              <Timer className="h-5 w-5 text-white" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500">
+              <Timer className="h-4 w-4 text-white" />
             </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight sm:text-xl">Tiempos Muertos Operativos</h1>
-              <p className="hidden text-xs text-muted-foreground sm:block">Análisis de eficiencia operativa en tiempo real</p>
-            </div>
+            <h1 className="text-base sm:text-lg font-bold tracking-tight">Tiempos Muertos Operativos</h1>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-              onChange={handleUpload}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4" />
-              )}
-              <span className="hidden sm:inline">{uploading ? 'Cargando...' : 'Cargar Excel'}</span>
+          <div className="flex items-center gap-2">
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleUpload} />
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              <span className="hidden sm:inline ml-1">{uploading ? 'Cargando...' : 'Cargar Excel'}</span>
             </Button>
-            <Button
-              size="sm"
-              onClick={fetchStats}
-              disabled={loading}
-              className="bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600"
-            >
+            <Button size="sm" onClick={() => { fetchStats(); fetchMovements(movPage); }} disabled={loading || movLoading}
+              className="bg-red-500 text-white hover:bg-red-600">
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Actualizar</span>
+              <span className="hidden sm:inline ml-1">Actualizar</span>
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6">
+      <main className="flex-1 mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6 space-y-4">
         {!hasData ? (
           <Card className="mt-10">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <Database className="h-16 w-16 text-muted-foreground/30 mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Sin datos cargados</h2>
-              <p className="text-muted-foreground text-center mb-6 max-w-md">
-                Carga un archivo Excel con los datos operativos para comenzar el análisis de tiempos muertos.
-              </p>
-              <Button onClick={() => fileInputRef.current?.click()} className="gap-2">
-                <FileSpreadsheet className="h-5 w-5" />
-                Cargar primer archivo
-              </Button>
+            <CardContent className="flex flex-col items-center py-16">
+              <Database className="h-14 w-14 text-muted-foreground/30 mb-4" />
+              <h2 className="text-lg font-semibold mb-2">Sin datos cargados</h2>
+              <p className="text-sm text-muted-foreground mb-6">Carga un archivo Excel para comenzar.</p>
+              <Button onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4 mr-2" />Cargar archivo</Button>
             </CardContent>
           </Card>
         ) : (
           <>
-            {/* Filters */}
-            <Card className="mb-4 sm:mb-6">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-                    <Filter className="h-4 w-4" />
-                    Filtros
-                    {activeFilters > 0 && (
-                      <Badge variant="secondary" className="ml-1">{activeFilters}</Badge>
-                    )}
-                  </div>
-                  <Select value={selectedOp} onValueChange={setSelectedOp}>
-                    <SelectTrigger className="w-full sm:w-[220px] h-8 text-xs">
-                      <SelectValue placeholder="Operador" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos los operadores</SelectItem>
-                      {filters?.operators.map(o => (
-                        <SelectItem key={o.codUti} value={o.codUti}>{o.nomUti}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={selectedZone} onValueChange={setSelectedZone}>
-                    <SelectTrigger className="w-full sm:w-[140px] h-8 text-xs">
-                      <SelectValue placeholder="Zona" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas las zonas</SelectItem>
-                      {filters?.zones.map(z => (
-                        <SelectItem key={z} value={z}>Zona {z}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={selectedAct} onValueChange={setSelectedAct}>
-                    <SelectTrigger className="w-full sm:w-[150px] h-8 text-xs">
-                      <SelectValue placeholder="Actividad" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas las actividades</SelectItem>
-                      {filters?.activities.map(a => (
-                        <SelectItem key={a} value={String(a)}>Actividad {a}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {activeFilters > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => { setSelectedOp('all'); setSelectedZone('all'); setSelectedAct('all'); }}
-                      className="h-8 text-xs"
-                    >
-                      <X className="h-3 w-3 mr-1" /> Limpiar
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            {/* Filter */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Operador:</span>
+              <Select value={selectedOp} onValueChange={handleOpChange}>
+                <SelectTrigger className="w-full sm:w-[240px] h-8 text-xs">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los operadores</SelectItem>
+                  {filters?.operators.map(o => (
+                    <SelectItem key={o.codUti} value={o.codUti}>{o.nomUti}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedOp !== 'all' && (
+                <Button variant="ghost" size="sm" onClick={() => handleOpChange('all')} className="h-8 text-xs">
+                  <X className="h-3 w-3 mr-1" />Limpiar
+                </Button>
+              )}
+            </div>
 
             {/* KPIs */}
-            {stats && (
-              <div className="mb-4 sm:mb-6 grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-                <KPICard
-                  title="Total Escaneos"
-                  value={stats.kpis.totalScans.toLocaleString('es-AR')}
-                  subtitle="Registros procesados"
-                  icon={BarChart3}
-                  color="bg-blue-500"
-                />
-                <KPICard
-                  title="Tiempo Muerto Total"
-                  value={formatDuration(stats.kpis.totalDeadTime)}
-                  subValue={`≈ ${Math.round(stats.kpis.totalDeadTime / 60)} minutos`}
-                  subtitle="Suma de todos los gaps"
-                  icon={Clock}
-                  color="bg-orange-500"
-                />
-                <KPICard
-                  title="Promedio de Gap"
-                  value={`${stats.kpis.avgDeadTime}s`}
-                  subtitle="Entre escaneos consecutivos"
-                  icon={TrendingUp}
-                  color="bg-emerald-500"
-                />
-                <KPICard
-                  title="Gap Máximo"
-                  value={formatDuration(stats.kpis.maxDeadTime)}
-                  subtitle="Mayor tiempo sin actividad"
-                  icon={AlertTriangle}
-                  color="bg-red-500"
-                />
-                <KPICard
-                  title="Operadores"
-                  value={String(stats.kpis.operatorsCount)}
-                  subValue={`${stats.byOperator.length > 0 ? Math.round(stats.byOperator[0].totalMin) : 0} min máx.`}
-                  subtitle="Activos en el período"
-                  icon={Users}
-                  color="bg-purple-500"
-                />
+            {stats && !loading && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <Card>
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className="rounded-lg bg-blue-500 p-2"><BarChart3 className="h-4 w-4 text-white" /></div>
+                    <div>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">Total Escaneos</p>
+                      <p className="text-lg sm:text-2xl font-bold">{stats.kpis.totalScans.toLocaleString('es-AR')}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className="rounded-lg bg-red-500 p-2"><Clock className="h-4 w-4 text-white" /></div>
+                    <div>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">Tiempo Muerto Total</p>
+                      <p className="text-lg sm:text-2xl font-bold">{fmtDur(stats.kpis.totalDeadTime)}</p>
+                      <p className="text-[10px] text-muted-foreground">{stats.kpis.deadTimeEvents} eventos (&gt;5 min)</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className="rounded-lg bg-amber-500 p-2"><TrendingUp className="h-4 w-4 text-white" /></div>
+                    <div>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">Promedio de Gap</p>
+                      <p className="text-lg sm:text-2xl font-bold">{stats.kpis.avgGap}s</p>
+                      <p className="text-[10px] text-muted-foreground">entre escaneos consecutivos</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className="rounded-lg bg-orange-500 p-2"><AlertTriangle className="h-4 w-4 text-white" /></div>
+                    <div>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">Mayor sin Actividad</p>
+                      <p className="text-lg sm:text-2xl font-bold">{fmtDur(stats.kpis.maxGap)}</p>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
 
-            {loading && !stats ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                <span className="ml-3 text-muted-foreground">Calculando estadísticas...</span>
-              </div>
-            ) : stats ? (
-              <Tabs defaultValue="overview" className="space-y-4">
-                <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid lg:grid-cols-3">
-                  <TabsTrigger value="overview">Vista General</TabsTrigger>
-                  <TabsTrigger value="operators">Por Operador</TabsTrigger>
-                  <TabsTrigger value="details">Detalle de Gaps</TabsTrigger>
-                </TabsList>
-
-                {/* OVERVIEW TAB */}
-                <TabsContent value="overview" className="space-y-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-semibold">Tiempos Muertos por Operador (Top 20)</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-2 sm:p-4">
-                        <ReactEChartsCore
-                          echarts={echarts}
-                          option={operatorBarOption}
-                          style={{ height: '380px', width: '100%' }}
-                          notMerge
-                        />
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-semibold">Distribución por Rango de Tiempo</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-2 sm:p-4">
-                        <ReactEChartsCore
-                          echarts={echarts}
-                          option={rangePieOption}
-                          style={{ height: '380px', width: '100%' }}
-                          notMerge
-                        />
-                      </CardContent>
-                    </Card>
-                  </div>
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-semibold">Evolución por Hora del Día</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-2 sm:p-4">
-                      <ReactEChartsCore
-                        echarts={echarts}
-                        option={hourLineOption}
-                        style={{ height: '350px', width: '100%' }}
-                        notMerge
-                      />
-                    </CardContent>
-                  </Card>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-semibold">Tiempos Muertos por Zona</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-2 sm:p-4">
-                        <ReactEChartsCore
-                          echarts={echarts}
-                          option={zoneBarOption}
-                          style={{ height: '300px', width: '100%' }}
-                          notMerge
-                        />
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-semibold">Tiempos Muertos por Actividad</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-2 sm:p-4">
-                        <ReactEChartsCore
-                          echarts={echarts}
-                          option={activityBarOption}
-                          style={{ height: '300px', width: '100%' }}
-                          notMerge
-                        />
-                      </CardContent>
-                    </Card>
-                  </div>
-                </TabsContent>
-
-                {/* OPERATORS TAB */}
-                <TabsContent value="operators">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-semibold">
-                        Ranking de Operadores por Tiempo Muerto
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="max-h-[600px] overflow-y-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-10 text-xs">#</TableHead>
-                              <TableHead className="text-xs">Operador</TableHead>
-                              <TableHead className="text-xs text-right">Tiempo Total</TableHead>
-                              <TableHead className="text-xs text-right">Promedio/Gap</TableHead>
-                              <TableHead className="text-xs text-right">Máximo</TableHead>
-                              <TableHead className="text-xs text-right">Gaps</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {stats.byOperator.map((op, i) => (
-                              <TableRow key={op.codUti}>
-                                <TableCell className="text-xs font-mono text-muted-foreground">
-                                  {i + 1}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="text-xs font-medium">{op.nomUti}</div>
-                                  <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <Badge variant={op.totalMin > 400 ? 'destructive' : op.totalMin > 300 ? 'secondary' : 'outline'} className="text-xs">
-                                    {op.totalMin} min
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-right text-xs">{op.avgSec}s</TableCell>
-                                <TableCell className="text-right text-xs">{formatDuration(op.maxSec)}</TableCell>
-                                <TableCell className="text-right text-xs">{op.gaps}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+            {/* Summary box + Chart */}
+            {stats && !loading && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Summary */}
+                <Card className="border-red-200 bg-red-50/50">
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <ArrowDown className="h-4 w-4 text-red-500" />
+                      <h3 className="text-sm font-semibold text-red-700">Resumen de Tiempos Muertos</h3>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Umbral considerado:</span>
+                        <span className="font-semibold">&gt; 5 minutos</span>
                       </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Eventos encontrados:</span>
+                        <span className="font-bold text-red-600">{stats.kpis.deadTimeEvents}</span>
+                      </div>
+                      <div className="border-t pt-2 flex justify-between">
+                        <span className="font-medium">Suma total:</span>
+                        <span className="font-bold text-red-600 text-base">{fmtDur(stats.kpis.totalDeadTime)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>≈ {Math.round(stats.kpis.totalDeadTime / 60)} minutos</span>
+                        <span>≈ {(stats.kpis.totalDeadTime / 3600).toFixed(1)} horas</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                {/* DETAILS TAB */}
-                <TabsContent value="details">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-semibold">
-                        Mayores Tiempos Muertos (Top 50)
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="max-h-[600px] overflow-y-auto">
+                {/* Chart */}
+                <Card className="lg:col-span-2">
+                  <CardContent className="p-2 sm:p-4">
+                    <p className="text-xs font-semibold mb-1 px-2 pt-2">Tiempos Muertos por Operador (&gt;5 min)</p>
+                    <ReactEChartsCore echarts={echarts} option={chartOption} style={{ height: '300px', width: '100%' }} notMerge />
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Movements Table */}
+            {movSummary && (
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <h3 className="text-sm font-semibold">Todos los Movimientos</h3>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="text-muted-foreground">{movTotal.toLocaleString('es-AR')} registros</span>
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-3 h-3 rounded-sm bg-red-100 border border-red-400"></span>
+                        Tiempo muerto (&gt;5 min): <b className="text-red-600">{movSummary.deadTimeCount}</b> eventos — <b className="text-red-600">{movSummary.totalDeadTimeFormatted}</b>
+                      </span>
+                    </div>
+                  </div>
+
+                  {movLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <span className="ml-2 text-sm text-muted-foreground">Cargando movimientos...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="w-10 text-xs">#</TableHead>
+                              <TableHead className="text-xs w-10">#</TableHead>
                               <TableHead className="text-xs">Operador</TableHead>
                               <TableHead className="text-xs">Fecha</TableHead>
-                              <TableHead className="text-xs">Desde</TableHead>
-                              <TableHead className="text-xs">Hasta</TableHead>
-                              <TableHead className="text-xs text-right">Duración</TableHead>
+                              <TableHead className="text-xs">Hora</TableHead>
                               <TableHead className="text-xs">Zona</TableHead>
+                              <TableHead className="text-xs">Activ.</TableHead>
+                              <TableHead className="text-xs">Producto</TableHead>
+                              <TableHead className="text-xs">Bultos</TableHead>
+                              <TableHead className="text-xs text-right">Gap</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {stats.topGaps.map((gap, i) => (
-                              <TableRow key={i}>
-                                <TableCell className="text-xs font-mono text-muted-foreground">
-                                  {i + 1}
+                            {movements.map((row, i) => (
+                              <TableRow
+                                key={row.id}
+                                className={row.isDeadTime ? 'bg-red-50 hover:bg-red-100/70' : ''}
+                              >
+                                <TableCell className="text-[10px] text-muted-foreground font-mono">
+                                  {(movPage - 1) * 200 + i + 1}
                                 </TableCell>
                                 <TableCell>
-                                  <div className="text-xs font-medium">{gap.nomUti}</div>
+                                  <div className="text-xs font-medium leading-tight">{row.nomUti}</div>
+                                  <div className="text-[10px] text-muted-foreground">{row.codUti}</div>
                                 </TableCell>
-                                <TableCell className="text-xs">{gap.fecha}</TableCell>
-                                <TableCell className="text-xs font-mono">{gap.prevHora}</TableCell>
-                                <TableCell className="text-xs font-mono">{gap.hora}</TableCell>
+                                <TableCell className="text-xs">{row.fecha}</TableCell>
+                                <TableCell className="text-xs font-mono">{row.hora}</TableCell>
+                                <TableCell className="text-xs">{row.zonSts || '—'}</TableCell>
+                                <TableCell className="text-xs">{row.codAct}</TableCell>
+                                <TableCell className="text-[10px] font-mono text-muted-foreground max-w-[120px] truncate">{row.codPro}</TableCell>
+                                <TableCell className="text-xs text-center">{row.bultos}</TableCell>
                                 <TableCell className="text-right">
-                                  <Badge
-                                    variant={gap.gapSeconds > 600 ? 'destructive' : gap.gapSeconds > 120 ? 'secondary' : 'outline'}
-                                    className="text-xs"
-                                  >
-                                    {gap.gapFormatted}
-                                  </Badge>
+                                  {row.gapSeconds !== null ? (
+                                    <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                                      row.isDeadTime
+                                        ? 'bg-red-500 text-white'
+                                        : 'text-muted-foreground'
+                                    }`}>
+                                      {fmtGap(row.gapSeconds)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground/50">—</span>
+                                  )}
                                 </TableCell>
-                                <TableCell className="text-xs">{gap.zona ? `Zona ${gap.zona}` : '-'}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
                         </Table>
                       </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              </Tabs>
-            ) : null}
+
+                      {/* Pagination */}
+                      <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                        <span className="text-xs text-muted-foreground">
+                          Página {movPage} de {movTotalPages}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={movPage <= 1}
+                            onClick={() => fetchMovements(movPage - 1)}>
+                            <ChevronLeft className="h-3 w-3" />
+                          </Button>
+                          <span className="text-xs px-2">{movPage} / {movTotalPages}</span>
+                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={movPage >= movTotalPages}
+                            onClick={() => fetchMovements(movPage + 1)}>
+                            <ChevronRight className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="mt-auto border-t bg-white/60 backdrop-blur-sm">
-        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
-          <p className="text-center text-xs text-muted-foreground">
-            Tiempos Muertos Operativos — Stack gratuito: Next.js + SQLite + ECharts — Listo para migrar a GitHub
+      <footer className="mt-auto border-t bg-white/60">
+        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6">
+          <p className="text-center text-[10px] text-muted-foreground">
+            Umbral: &gt;5 min = tiempo muerto — Next.js + SQLite + ECharts
           </p>
         </div>
       </footer>

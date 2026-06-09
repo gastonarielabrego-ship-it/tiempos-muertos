@@ -1,21 +1,18 @@
 ---
-Task ID: 1
+Task ID: 2
 Agent: Super Z (Main)
-Task: Build "Tiempos Muertos Operativos" web dashboard
+Task: Simplify dashboard - only >5min = dead time, show all movements with red highlighting
 
 Work Log:
-- Analyzed uploaded Excel file (22,731 rows, 62 operators, 12 columns)
-- Identified dead time calculation logic: gaps between consecutive scans per operator per day
-- Designed Prisma schema with SQLite (codPro as String for large barcodes)
-- Created seed script and loaded all 22,731 records
-- Built API routes: /api/upload (Excel file upload), /api/records (filter options), /api/stats (dead time calculations)
-- Built full dashboard with ECharts visualizations, KPI cards, filter controls
-- Fixed codPro Int→String schema issue and Turbopack cache
-- Verified all features with Agent Browser
+- Rewrote /api/stats to only count gaps > 300s (5 min) as dead time
+- Created /api/movements with pagination (200 per page) returning ALL scan records with computed gaps
+- Rewrote page.tsx to be much simpler: 4 KPIs, 1 summary box, 1 chart, 1 full movement table
+- Red highlighting (bg-red-50 + red badge) only for gaps > 5 minutes
+- Summary box shows total dead time, event count, and threshold
+- Verified with Agent Browser: 200 rows, 7 red rows on page 1, correct data
 
 Stage Summary:
-- Dashboard fully functional with 5 ECharts charts, 6 KPI cards, 3 tabs
-- Filters by operator, zone, activity all working
-- File upload button for Excel updates
-- 22,731 records loaded and processed successfully
-- Stack: Next.js 16 + SQLite (Prisma) + ECharts + shadcn/ui — 100% free/open source
+- KPIs: Total escaneos (22,731), Tiempo muerto total (147h 29m), Promedio gap (65.3s), Máximo (43m 26s)
+- 853 events > 5 min found, totaling 147.5 hours of dead time
+- All movements visible with pagination, red rows for > 5 min gaps
+- Simplified from 3 tabs + 5 charts to single-page layout
