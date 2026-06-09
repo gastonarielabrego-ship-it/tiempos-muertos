@@ -12,7 +12,7 @@ import {
 import {
   Upload, RefreshCw, Clock, BarChart3, AlertTriangle,
   Loader2, Database, Timer, ChevronLeft, ChevronRight,
-  X, ArrowDown, Trophy,
+  X, ArrowDown, Trophy, ArrowRight, User,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -75,7 +75,7 @@ export default function DashboardPage() {
   const [gapTotalPages, setGapTotalPages] = useState(1);
   const [gapTotal, setGapTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [gapLoading, setGapLoading] = useState(true);
+  const [gapLoading, setGapLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedOp, setSelectedOp] = useState<string>('all');
   const [hasData, setHasData] = useState(true);
@@ -109,13 +109,14 @@ export default function DashboardPage() {
     }
   }, [selectedOp, toast]);
 
-  const fetchGaps = useCallback(async (page: number) => {
+  const fetchGaps = useCallback(async (page: number, op?: string) => {
     setGapLoading(true);
     try {
       const params = new URLSearchParams();
       params.set('page', String(page));
-      params.set('pageSize', '100');
-      if (selectedOp !== 'all') params.set('operator', selectedOp);
+      params.set('pageSize', '50');
+      const operator = op ?? selectedOp;
+      if (operator !== 'all') params.set('operator', operator);
       const res = await fetch(`/api/movements?${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -135,12 +136,31 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (hasData) { fetchStats(); fetchGaps(1); }
-    else { setLoading(false); setGapLoading(false); }
-  }, [fetchStats, fetchGaps, hasData]);
+    else { setLoading(false); }
+  }, [fetchStats, hasData]);
+
+  // When selectedOp changes, refetch
+  useEffect(() => {
+    if (hasData) {
+      fetchStats();
+      if (activeTab === 'operador' && selectedOp !== 'all') {
+        fetchGaps(1);
+      }
+    }
+  }, [selectedOp, activeTab, hasData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpChange = (val: string) => {
     setSelectedOp(val);
     setGapPage(1);
+    if (val !== 'all') {
+      setActiveTab('operador');
+    }
+  };
+
+  const handleOperatorClick = (codUti: string) => {
+    setSelectedOp(codUti);
+    setGapPage(1);
+    setActiveTab('operador');
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,6 +176,7 @@ export default function DashboardPage() {
       toast({ title: 'Datos actualizados', description: `${data.totalRecords} registros cargados` });
       setHasData(true);
       setSelectedOp('all');
+      setActiveTab('ranking');
       await fetchFilters();
     } catch (err) {
       toast({ title: 'Error al cargar', description: err instanceof Error ? err.message : 'Error desconocido', variant: 'destructive' });
@@ -164,6 +185,14 @@ export default function DashboardPage() {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
+  // Get operator name for the selected one
+  const selectedOpName = selectedOp !== 'all'
+    ? (stats?.byOperator.find(o => o.codUti === selectedOp)?.nomUti ?? filters?.operators.find(o => o.codUti === selectedOp)?.nomUti ?? selectedOp)
+    : null;
+  const selectedOpStats = selectedOp !== 'all'
+    ? stats?.byOperator.find(o => o.codUti === selectedOp)
+    : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -218,7 +247,7 @@ export default function DashboardPage() {
                 </SelectContent>
               </Select>
               {selectedOp !== 'all' && (
-                <Button variant="ghost" size="sm" onClick={() => handleOpChange('all')} className="h-8 text-xs">
+                <Button variant="ghost" size="sm" onClick={() => { handleOpChange('all'); setActiveTab('ranking'); }} className="h-8 text-xs">
                   <X className="h-3 w-3 mr-1" />Limpiar
                 </Button>
               )}
@@ -269,7 +298,7 @@ export default function DashboardPage() {
             )}
 
             {/* Summary box */}
-            {gapSummary && (
+            {gapSummary && selectedOp === 'all' && (
               <Card className="border-red-200 bg-red-50/50">
                 <CardContent className="p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-2">
@@ -298,11 +327,41 @@ export default function DashboardPage() {
               </Card>
             )}
 
+            {/* Operator detail summary (when one is selected) */}
+            {selectedOp !== 'all' && selectedOpStats && gapSummary && (
+              <Card className="border-red-200 bg-red-50/50">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <User className="h-4 w-4 text-red-500" />
+                    <h3 className="text-sm font-semibold text-red-700">{selectedOpName}</h3>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">Eventos</span>
+                      <span className="font-bold text-red-600 text-base">{gapSummary.deadTimeCount}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">Suma total</span>
+                      <span className="font-bold text-red-600 text-base">{gapSummary.totalDeadTimeFormatted}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">En minutos</span>
+                      <span className="font-bold text-red-700 text-base">{selectedOpStats.totalMin} min</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">Mayor gap</span>
+                      <span className="font-bold text-red-700 text-base">{fmtDur(selectedOpStats.maxGap)}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Tabs */}
             {stats && !loading && (
               <div className="flex gap-1 border-b">
                 <button
-                  onClick={() => setActiveTab('ranking')}
+                  onClick={() => { setActiveTab('ranking'); if (selectedOp !== 'all') { /* keep filter */ } }}
                   className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
                     activeTab === 'ranking'
                       ? 'border-red-500 text-red-600'
@@ -310,7 +369,7 @@ export default function DashboardPage() {
                   }`}
                 >
                   <Trophy className="h-3 w-3 inline mr-1" />
-                  Ranking de Gaps
+                  Ranking
                 </button>
                 <button
                   onClick={() => setActiveTab('operador')}
@@ -320,163 +379,229 @@ export default function DashboardPage() {
                       : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
                 >
+                  <User className="h-3 w-3 inline mr-1" />
                   Por Operador
+                  {selectedOp !== 'all' && (
+                    <span className="ml-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">
+                      {selectedOpName}
+                    </span>
+                  )}
                 </button>
               </div>
             )}
 
-            {/* Ranking Tab */}
-            {activeTab === 'ranking' && gapSummary && (
+            {/* ===================== RANKING TAB ===================== */}
+            {activeTab === 'ranking' && stats && stats.byOperator.length > 0 && (
               <Card>
                 <CardContent className="p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                     <h3 className="text-sm font-semibold">
-                      Ranking de Tiempos Muertos (mayor a menor)
+                      Ranking por Suma de Tiempo Muerto
                     </h3>
                     <span className="text-xs text-muted-foreground">
-                      {gapTotal} gaps &gt;5 min encontrados
+                      {stats.byOperator.length} operadores con tiempos muertos
                     </span>
                   </div>
-
-                  {gapLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                      <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
-                    </div>
-                  ) : gaps.length === 0 ? (
-                    <div className="text-center py-12 text-sm text-muted-foreground">
-                      No se encontraron gaps mayores a 5 minutos
-                    </div>
-                  ) : (
-                    <>
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="text-xs w-12 text-center">#</TableHead>
-                              <TableHead className="text-xs">Operador</TableHead>
-                              <TableHead className="text-xs">Fecha</TableHead>
-                              <TableHead className="text-xs text-center" colSpan={3}>Escaneo Anterior</TableHead>
-                              <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
-                              <TableHead className="text-xs text-center" colSpan={3}>Escaneo Siguiente</TableHead>
-                            </TableRow>
-                            <TableRow>
-                              <TableHead className="text-[10px]"></TableHead>
-                              <TableHead className="text-[10px]"></TableHead>
-                              <TableHead className="text-[10px]"></TableHead>
-                              <TableHead className="text-[10px] text-muted-foreground">Hora</TableHead>
-                              <TableHead className="text-[10px] text-muted-foreground">Zona</TableHead>
-                              <TableHead className="text-[10px] text-muted-foreground">Producto</TableHead>
-                              <TableHead className="text-[10px]"></TableHead>
-                              <TableHead className="text-[10px] text-muted-foreground">Hora</TableHead>
-                              <TableHead className="text-[10px] text-muted-foreground">Zona</TableHead>
-                              <TableHead className="text-[10px] text-muted-foreground">Producto</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {gaps.map((row) => {
-                              const isTop3 = row.rank <= 3;
-                              return (
-                                <TableRow
-                                  key={`${row.codUti}-${row.fecha}-${row.prevHora}-${row.currHora}`}
-                                  className={isTop3 ? 'bg-red-50 hover:bg-red-100/70' : ''}
-                                >
-                                  <TableCell className="text-center">
-                                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                                      isTop3
-                                        ? 'bg-red-500 text-white'
-                                        : 'bg-slate-100 text-muted-foreground'
-                                    }`}>
-                                      {row.rank}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="text-xs font-medium leading-tight">{row.nomUti}</div>
-                                    <div className="text-[10px] text-muted-foreground">{row.codUti}</div>
-                                  </TableCell>
-                                  <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
-                                  {/* Prev scan */}
-                                  <TableCell className="text-xs font-mono text-muted-foreground">{row.prevHora}</TableCell>
-                                  <TableCell className="text-xs">{row.prevZonSts || '—'}</TableCell>
-                                  <TableCell className="text-[10px] font-mono text-muted-foreground max-w-[110px] truncate">{row.prevCodPro}</TableCell>
-                                  {/* Gap */}
-                                  <TableCell className="text-center">
-                                    <span className="text-xs font-bold px-2 py-1 rounded bg-red-500 text-white whitespace-nowrap">
-                                      {fmtDur(row.gapSeconds)}
-                                    </span>
-                                  </TableCell>
-                                  {/* Current scan */}
-                                  <TableCell className="text-xs font-mono text-muted-foreground">{row.currHora}</TableCell>
-                                  <TableCell className="text-xs">{row.currZonSts || '—'}</TableCell>
-                                  <TableCell className="text-[10px] font-mono text-muted-foreground max-w-[110px] truncate">{row.currCodPro}</TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-
-                      {/* Pagination */}
-                      <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                        <span className="text-xs text-muted-foreground">
-                          Página {gapPage} de {gapTotalPages} ({gapTotal} gaps)
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage <= 1}
-                            onClick={() => fetchGaps(gapPage - 1)}>
-                            <ChevronLeft className="h-3 w-3" />
-                          </Button>
-                          <span className="text-xs px-2">{gapPage} / {gapTotalPages}</span>
-                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage >= gapTotalPages}
-                            onClick={() => fetchGaps(gapPage + 1)}>
-                            <ChevronRight className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Operador Tab */}
-            {activeTab === 'operador' && stats && stats.byOperator.length > 0 && (
-              <Card>
-                <CardContent className="p-4">
-                  <h3 className="text-sm font-semibold mb-3">Tiempos Muertos por Operador</h3>
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="text-xs">#</TableHead>
+                          <TableHead className="text-xs w-14 text-center">#</TableHead>
                           <TableHead className="text-xs">Operador</TableHead>
-                          <TableHead className="text-xs text-right">Total (min)</TableHead>
+                          <TableHead className="text-xs text-right">Tiempo Total</TableHead>
+                          <TableHead className="text-xs text-right">Minutos</TableHead>
                           <TableHead className="text-xs text-right">Eventos</TableHead>
                           <TableHead className="text-xs text-right">Mayor Gap</TableHead>
+                          <TableHead className="text-xs w-10"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {stats.byOperator.map((op, i) => (
-                          <TableRow key={op.codUti} className={i < 3 ? 'bg-red-50 hover:bg-red-100/70' : ''}>
-                            <TableCell className="text-xs font-mono text-muted-foreground">{i + 1}</TableCell>
-                            <TableCell>
-                              <div className="text-xs font-medium">{op.nomUti}</div>
-                              <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
-                            </TableCell>
-                            <TableCell className="text-xs text-right font-bold">
-                              <span className={op.totalMin > 30 ? 'text-red-600' : op.totalMin > 15 ? 'text-orange-500' : ''}>
-                                {op.totalMin} min
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-xs text-right">{op.events}</TableCell>
-                            <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {stats.byOperator.map((op, i) => {
+                          const isTop3 = i < 3;
+                          return (
+                            <TableRow
+                              key={op.codUti}
+                              className={`${isTop3 ? 'bg-red-50 hover:bg-red-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+                              onClick={() => handleOperatorClick(op.codUti)}
+                            >
+                              <TableCell className="text-center">
+                                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                  isTop3
+                                    ? 'bg-red-500 text-white'
+                                    : i < 10 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-muted-foreground'
+                                }`}>
+                                  {i + 1}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-xs font-medium">{op.nomUti}</div>
+                                <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+                              </TableCell>
+                              <TableCell className="text-xs text-right font-bold">
+                                <span className={isTop3 ? 'text-red-600' : op.totalMin > 100 ? 'text-orange-600' : ''}>
+                                  {fmtDur(op.totalMin * 60)}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-xs text-right font-bold">
+                                <span className={isTop3 ? 'text-red-600' : ''}>{op.totalMin} min</span>
+                              </TableCell>
+                              <TableCell className="text-xs text-right">{op.events}</TableCell>
+                              <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
+                              <TableCell className="text-center">
+                                <span className="text-[10px] text-muted-foreground">ver</span>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
                 </CardContent>
               </Card>
+            )}
+
+            {/* ===================== POR OPERADOR TAB ===================== */}
+            {activeTab === 'operador' && (
+              selectedOp === 'all' ? (
+                /* No operator selected - show message */
+                <Card>
+                  <CardContent className="flex flex-col items-center py-12">
+                    <User className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                    <p className="text-sm text-muted-foreground">Seleccioná un operador del ranking o del filtro para ver sus eventos</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                /* Operator selected - show gap details */
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <h3 className="text-sm font-semibold">
+                        Eventos de {selectedOpName}
+                      </h3>
+                      <span className="text-xs text-muted-foreground">
+                        {gapTotal} gaps &gt;5 min
+                      </span>
+                    </div>
+
+                    {gapLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+                      </div>
+                    ) : gaps.length === 0 ? (
+                      <div className="text-center py-12 text-sm text-muted-foreground">
+                        No se encontraron gaps mayores a 5 minutos
+                      </div>
+                    ) : (
+                      <>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-xs w-10 text-center">#</TableHead>
+                                <TableHead className="text-xs">Fecha</TableHead>
+                                <TableHead className="text-xs text-center bg-blue-50" colSpan={3}>Pickeo Previo</TableHead>
+                                <TableHead className="text-xs text-center">Trayecto</TableHead>
+                                <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
+                                <TableHead className="text-xs text-center bg-green-50" colSpan={3}>Pickeo Posterior</TableHead>
+                              </TableRow>
+                              <TableRow>
+                                <TableHead className="text-[10px]"></TableHead>
+                                <TableHead className="text-[10px]"></TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground">Zona Origen → Zona Destino</TableHead>
+                                <TableHead className="text-[10px]"></TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {gaps.map((row) => {
+                                const isTop3 = row.rank <= 3;
+                                const sameZone = row.prevZonSts === row.currZonSts;
+                                return (
+                                  <TableRow
+                                    key={`${row.fecha}-${row.prevHora}-${row.currHora}`}
+                                    className={isTop3 ? 'bg-red-50 hover:bg-red-100/70' : ''}
+                                  >
+                                    <TableCell className="text-center">
+                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                        isTop3 ? 'bg-red-500 text-white' : 'bg-slate-100 text-muted-foreground'
+                                      }`}>
+                                        {row.rank}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+                                    {/* Prev pick */}
+                                    <TableCell className="text-xs font-mono text-muted-foreground bg-blue-50/50">{row.prevHora}</TableCell>
+                                    <TableCell className="text-xs bg-blue-50/50">
+                                      <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">
+                                        {row.prevZonSts || '—'}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.prevCodPro}</TableCell>
+                                    {/* Zone transition */}
+                                    <TableCell className="text-center px-1">
+                                      <div className="flex items-center justify-center gap-0.5">
+                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${
+                                          sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'
+                                        }`}>
+                                          {row.prevZonSts || '?'}
+                                        </span>
+                                        <ArrowRight className={`h-3 w-3 ${sameZone ? 'text-slate-300' : 'text-amber-500'}`} />
+                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${
+                                          sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'
+                                        }`}>
+                                          {row.currZonSts || '?'}
+                                        </span>
+                                      </div>
+                                    </TableCell>
+                                    {/* Gap */}
+                                    <TableCell className="text-center">
+                                      <span className="text-xs font-bold px-2 py-1 rounded bg-red-500 text-white whitespace-nowrap">
+                                        {fmtDur(row.gapSeconds)}
+                                      </span>
+                                    </TableCell>
+                                    {/* Post pick */}
+                                    <TableCell className="text-xs font-mono text-muted-foreground bg-green-50/50">{row.currHora}</TableCell>
+                                    <TableCell className="text-xs bg-green-50/50">
+                                      <span className="inline-block px-1.5 py-0.5 rounded bg-green-200 text-green-800 text-[10px] font-semibold">
+                                        {row.currZonSts || '—'}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-green-50/50 max-w-[110px] truncate">{row.currCodPro}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+
+                        {/* Pagination */}
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                          <span className="text-xs text-muted-foreground">
+                            Página {gapPage} de {gapTotalPages} ({gapTotal} gaps)
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage <= 1}
+                              onClick={() => fetchGaps(gapPage - 1)}>
+                              <ChevronLeft className="h-3 w-3" />
+                            </Button>
+                            <span className="text-xs px-2">{gapPage} / {gapTotalPages}</span>
+                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage >= gapTotalPages}
+                              onClick={() => fetchGaps(gapPage + 1)}>
+                              <ChevronRight className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )
             )}
           </>
         )}
