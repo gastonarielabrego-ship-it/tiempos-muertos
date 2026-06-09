@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 
+const DEAD_TIME_THRESHOLD = 300; // 5 minutos
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -22,6 +24,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Group by operator + date
     const grouped = new Map<string, typeof allScans>();
     for (const s of allScans) {
       const key = `${s.codUti}|${s.fecha.toISOString().split('T')[0]}`;
@@ -29,70 +32,68 @@ export async function GET(request: NextRequest) {
       grouped.get(key)!.push(s);
     }
 
-    interface Row {
-      id: number;
+    interface GapRow {
+      rank: number;
       codUti: string;
       nomUti: string;
       fecha: string;
-      hora: string;
-      codAct: number;
-      zonSts: string | null;
-      allSts: number;
-      dplSts: number;
-      nivSts: number;
-      codPro: string;
-      pcbPro: number;
-      bultos: number;
-      gapSeconds: number | null;
-      isDeadTime: boolean;
+      gapSeconds: number;
+      // Previous scan info
+      prevHora: string;
+      prevZonSts: string | null;
+      prevCodAct: number;
+      prevCodPro: string;
+      prevBultos: number;
+      // Current scan info (after the gap)
+      currHora: string;
+      currZonSts: string | null;
+      currCodAct: number;
+      currCodPro: string;
+      currBultos: number;
     }
 
-    const rows: Row[] = [];
+    const gaps: GapRow[] = [];
     let totalDeadTimeSec = 0;
 
     for (const [, dayScans] of grouped) {
-      for (let i = 0; i < dayScans.length; i++) {
+      for (let i = 1; i < dayScans.length; i++) {
+        const prev = dayScans[i - 1];
         const curr = dayScans[i];
-        let gapSeconds: number | null = null;
-        let isDeadTime = false;
+        const p = prev.hora.split(':').map(Number);
+        const c = curr.hora.split(':').map(Number);
+        const gap = (c[0] * 3600 + c[1] * 60 + c[2]) - (p[0] * 3600 + p[1] * 60 + p[2]);
 
-        if (i > 0) {
-          const prev = dayScans[i - 1];
-          const p = prev.hora.split(':').map(Number);
-          const c = curr.hora.split(':').map(Number);
-          const gap = (c[0] * 3600 + c[1] * 60 + c[2]) - (p[0] * 3600 + p[1] * 60 + p[2]);
-          if (gap > 0) {
-            gapSeconds = gap;
-            isDeadTime = gap > 300;
-            if (isDeadTime) totalDeadTimeSec += gap;
-          }
+        if (gap > DEAD_TIME_THRESHOLD) {
+          totalDeadTimeSec += gap;
+          gaps.push({
+            rank: 0, // will be set after sorting
+            codUti: curr.codUti,
+            nomUti: curr.nomUti,
+            fecha: curr.fecha.toISOString().split('T')[0],
+            gapSeconds: gap,
+            prevHora: prev.hora,
+            prevZonSts: prev.zonSts,
+            prevCodAct: prev.codAct,
+            prevCodPro: prev.codPro,
+            prevBultos: prev.bultos,
+            currHora: curr.hora,
+            currZonSts: curr.zonSts,
+            currCodAct: curr.codAct,
+            currCodPro: curr.codPro,
+            currBultos: curr.bultos,
+          });
         }
-
-        rows.push({
-          id: curr.id,
-          codUti: curr.codUti,
-          nomUti: curr.nomUti,
-          fecha: curr.fecha.toISOString().split('T')[0],
-          hora: curr.hora,
-          codAct: curr.codAct,
-          zonSts: curr.zonSts,
-          allSts: curr.allSts,
-          dplSts: curr.dplSts,
-          nivSts: curr.nivSts,
-          codPro: curr.codPro,
-          pcbPro: curr.pcbPro,
-          bultos: curr.bultos,
-          gapSeconds,
-          isDeadTime,
-        });
       }
     }
 
-    const total = rows.length;
-    const totalPages = Math.ceil(total / pageSize);
+    // Sort by gap descending (ranking)
+    gaps.sort((a, b) => b.gapSeconds - a.gapSeconds);
+    gaps.forEach((g, i) => { g.rank = i + 1; });
+
+    const total = gaps.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const start = (page - 1) * pageSize;
-    const paginatedRows = rows.slice(start, start + pageSize);
-    const deadTimeCount = rows.filter(r => r.isDeadTime).length;
+    const paginatedRows = gaps.slice(start, start + pageSize);
 
     return NextResponse.json({
       rows: paginatedRows,
@@ -100,7 +101,7 @@ export async function GET(request: NextRequest) {
       summary: {
         totalDeadTimeSec,
         totalDeadTimeFormatted: formatSec(totalDeadTimeSec),
-        deadTimeCount,
+        deadTimeCount: total,
       },
     });
   } catch (error) {

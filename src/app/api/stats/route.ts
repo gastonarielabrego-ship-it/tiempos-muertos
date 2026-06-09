@@ -35,8 +35,7 @@ export async function GET(request: NextRequest) {
     let totalDeadTime = 0;
     let deadTimeEvents = 0;
     let maxGap = 0;
-    let totalGapSum = 0;
-    let totalGapCount = 0;
+    let deadTimeGapSum = 0; // sum only of gaps > 5min
 
     const opMap = new Map<string, { name: string; deadSec: number; events: number; maxSec: number }>();
 
@@ -49,13 +48,12 @@ export async function GET(request: NextRequest) {
         const gap = (c[0] * 3600 + c[1] * 60 + c[2]) - (p[0] * 3600 + p[1] * 60 + p[2]);
 
         if (gap > 0) {
-          totalGapSum += gap;
-          totalGapCount++;
           if (gap > maxGap) maxGap = gap;
 
           if (gap > DEAD_TIME_THRESHOLD) {
             totalDeadTime += gap;
             deadTimeEvents++;
+            deadTimeGapSum += gap;
             if (!opMap.has(curr.codUti)) {
               opMap.set(curr.codUti, { name: curr.nomUti, deadSec: 0, events: 0, maxSec: 0 });
             }
@@ -83,7 +81,7 @@ export async function GET(request: NextRequest) {
         totalScans: scans.length,
         totalDeadTime: Math.round(totalDeadTime),
         deadTimeEvents,
-        avgGap: totalGapCount > 0 ? Math.round((totalGapSum / totalGapCount) * 10) / 10 : 0,
+        avgGap: deadTimeEvents > 0 ? Math.round((deadTimeGapSum / deadTimeEvents) * 10) / 10 : 0,
         maxGap: Math.round(maxGap),
       },
       byOperator,

@@ -1,11 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import ReactEChartsCore from 'echarts-for-react/lib/core';
-import * as echarts from 'echarts/core';
-import { BarChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, DataZoomComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,12 +11,10 @@ import {
 } from '@/components/ui/table';
 import {
   Upload, RefreshCw, Clock, BarChart3, AlertTriangle,
-  TrendingUp, Loader2, Database, Timer, ChevronLeft, ChevronRight,
-  X, ArrowDown,
+  Loader2, Database, Timer, ChevronLeft, ChevronRight,
+  X, ArrowDown, Trophy,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-
-echarts.use([BarChart, GridComponent, TooltipComponent, DataZoomComponent, CanvasRenderer]);
 
 // --- Types ---
 interface KPIs {
@@ -40,22 +33,22 @@ interface OpStat {
   maxGap: number;
 }
 
-interface MovementRow {
-  id: number;
+interface GapRow {
+  rank: number;
   codUti: string;
   nomUti: string;
   fecha: string;
-  hora: string;
-  codAct: number;
-  zonSts: string | null;
-  allSts: number;
-  dplSts: number;
-  nivSts: number;
-  codPro: string;
-  pcbPro: number;
-  bultos: number;
-  gapSeconds: number | null;
-  isDeadTime: boolean;
+  gapSeconds: number;
+  prevHora: string;
+  prevZonSts: string | null;
+  prevCodAct: number;
+  prevCodPro: string;
+  prevBultos: number;
+  currHora: string;
+  currZonSts: string | null;
+  currCodAct: number;
+  currCodPro: string;
+  currBultos: number;
 }
 
 interface Filters {
@@ -72,25 +65,21 @@ function fmtDur(s: number): string {
   return `${sec}s`;
 }
 
-function fmtGap(s: number | null): string {
-  if (s === null) return '—';
-  return fmtDur(s);
-}
-
 // --- Main Page ---
 export default function DashboardPage() {
   const [stats, setStats] = useState<{ kpis: KPIs; byOperator: OpStat[] } | null>(null);
   const [filters, setFilters] = useState<Filters | null>(null);
-  const [movements, setMovements] = useState<MovementRow[]>([]);
-  const [movSummary, setMovSummary] = useState<{ totalDeadTimeSec: number; totalDeadTimeFormatted: string; deadTimeCount: number } | null>(null);
-  const [movPage, setMovPage] = useState(1);
-  const [movTotalPages, setMovTotalPages] = useState(1);
-  const [movTotal, setMovTotal] = useState(0);
+  const [gaps, setGaps] = useState<GapRow[]>([]);
+  const [gapSummary, setGapSummary] = useState<{ totalDeadTimeSec: number; totalDeadTimeFormatted: string; deadTimeCount: number } | null>(null);
+  const [gapPage, setGapPage] = useState(1);
+  const [gapTotalPages, setGapTotalPages] = useState(1);
+  const [gapTotal, setGapTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [movLoading, setMovLoading] = useState(true);
+  const [gapLoading, setGapLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [selectedOp, setSelectedOp] = useState<string>('all');
   const [hasData, setHasData] = useState(true);
+  const [activeTab, setActiveTab] = useState<'ranking' | 'operador'>('ranking');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -120,38 +109,38 @@ export default function DashboardPage() {
     }
   }, [selectedOp, toast]);
 
-  const fetchMovements = useCallback(async (page: number) => {
-    setMovLoading(true);
+  const fetchGaps = useCallback(async (page: number) => {
+    setGapLoading(true);
     try {
       const params = new URLSearchParams();
       params.set('page', String(page));
-      params.set('pageSize', '200');
+      params.set('pageSize', '100');
       if (selectedOp !== 'all') params.set('operator', selectedOp);
       const res = await fetch(`/api/movements?${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setMovements(data.rows);
-      setMovSummary(data.summary);
-      setMovPage(data.pagination.page);
-      setMovTotalPages(data.pagination.totalPages);
-      setMovTotal(data.pagination.total);
+      setGaps(data.rows);
+      setGapSummary(data.summary);
+      setGapPage(data.pagination.page);
+      setGapTotalPages(data.pagination.totalPages);
+      setGapTotal(data.pagination.total);
     } catch {
-      toast({ title: 'Error', description: 'No se pudieron cargar los movimientos', variant: 'destructive' });
+      toast({ title: 'Error', description: 'No se pudieron cargar los gaps', variant: 'destructive' });
     } finally {
-      setMovLoading(false);
+      setGapLoading(false);
     }
   }, [selectedOp, toast]);
 
   useEffect(() => { fetchFilters(); }, [fetchFilters]);
 
   useEffect(() => {
-    if (hasData) { fetchStats(); fetchMovements(1); }
-    else { setLoading(false); setMovLoading(false); }
-  }, [fetchStats, fetchMovements, hasData]);
+    if (hasData) { fetchStats(); fetchGaps(1); }
+    else { setLoading(false); setGapLoading(false); }
+  }, [fetchStats, fetchGaps, hasData]);
 
   const handleOpChange = (val: string) => {
     setSelectedOp(val);
-    setMovPage(1);
+    setGapPage(1);
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,36 +165,6 @@ export default function DashboardPage() {
     }
   };
 
-  // EChart: dead time by operator
-  const chartOption: echarts.EChartsOption = stats && stats.byOperator.length > 0 ? {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: (params: unknown) => {
-      const p = params as { name: string; value: number; seriesName: string }[];
-      if (!p || !p[0]) return '';
-      const op = stats.byOperator.find(o => o.nomUti.split(' ').slice(-2).join(' ') === p[0].name);
-      return `<b>${p[0].name}</b><br/>Tiempo muerto: ${p[0].value} min<br/>Eventos: ${op?.events || 0}<br/>Máximo: ${op ? fmtDur(op.maxGap) : ''}`;
-    }},
-    grid: { left: '3%', right: '4%', bottom: '18%', top: '5%', containLabel: true },
-    dataZoom: [{ type: 'slider', start: 0, end: 100, height: 20 }],
-    xAxis: {
-      type: 'category',
-      data: stats.byOperator.map(o => o.nomUti.split(' ').slice(-2).join(' ')),
-      axisLabel: { rotate: 45, fontSize: 10 },
-    },
-    yAxis: { type: 'value', name: 'Minutos (>5 min)', nameLocation: 'middle', nameGap: 50 },
-    series: [{
-      type: 'bar',
-      data: stats.byOperator.map(o => o.totalMin),
-      itemStyle: {
-        color: (params: unknown) => {
-          const p = params as { dataIndex: number };
-          const op = stats.byOperator[p.dataIndex];
-          return op && op.totalMin > 30 ? '#ef4444' : op && op.totalMin > 15 ? '#f97316' : '#eab308';
-        },
-        borderRadius: [4, 4, 0, 0],
-      },
-    }],
-  } : {};
-
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       {/* Header */}
@@ -223,7 +182,7 @@ export default function DashboardPage() {
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               <span className="hidden sm:inline ml-1">{uploading ? 'Cargando...' : 'Cargar Excel'}</span>
             </Button>
-            <Button size="sm" onClick={() => { fetchStats(); fetchMovements(movPage); }} disabled={loading || movLoading}
+            <Button size="sm" onClick={() => { fetchStats(); fetchGaps(gapPage); }} disabled={loading || gapLoading}
               className="bg-red-500 text-white hover:bg-red-600">
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline ml-1">Actualizar</span>
@@ -277,23 +236,23 @@ export default function DashboardPage() {
                     </div>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-red-200 bg-red-50/60">
                   <CardContent className="p-4 flex items-center gap-3">
                     <div className="rounded-lg bg-red-500 p-2"><Clock className="h-4 w-4 text-white" /></div>
                     <div>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground">Tiempo Muerto Total</p>
-                      <p className="text-lg sm:text-2xl font-bold">{fmtDur(stats.kpis.totalDeadTime)}</p>
-                      <p className="text-[10px] text-muted-foreground">{stats.kpis.deadTimeEvents} eventos (&gt;5 min)</p>
+                      <p className="text-[10px] sm:text-xs text-red-600 font-medium">Suma Tiempos Muertos</p>
+                      <p className="text-lg sm:text-2xl font-bold text-red-700">{fmtDur(stats.kpis.totalDeadTime)}</p>
+                      <p className="text-[10px] text-red-500">{stats.kpis.deadTimeEvents} eventos (&gt;5 min)</p>
                     </div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4 flex items-center gap-3">
-                    <div className="rounded-lg bg-amber-500 p-2"><TrendingUp className="h-4 w-4 text-white" /></div>
+                    <div className="rounded-lg bg-amber-500 p-2"><AlertTriangle className="h-4 w-4 text-white" /></div>
                     <div>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground">Promedio de Gap</p>
-                      <p className="text-lg sm:text-2xl font-bold">{stats.kpis.avgGap}s</p>
-                      <p className="text-[10px] text-muted-foreground">entre escaneos consecutivos</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">Promedio Gap (&gt;5 min)</p>
+                      <p className="text-lg sm:text-2xl font-bold">{fmtDur(stats.kpis.avgGap)}</p>
+                      <p className="text-[10px] text-muted-foreground">solo tiempos muertos</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -309,66 +268,84 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Summary box + Chart */}
-            {stats && !loading && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Summary */}
-                <Card className="border-red-200 bg-red-50/50">
-                  <CardContent className="p-4 sm:p-6">
-                    <div className="flex items-center gap-2 mb-3">
-                      <ArrowDown className="h-4 w-4 text-red-500" />
-                      <h3 className="text-sm font-semibold text-red-700">Resumen de Tiempos Muertos</h3>
+            {/* Summary box */}
+            {gapSummary && (
+              <Card className="border-red-200 bg-red-50/50">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ArrowDown className="h-4 w-4 text-red-500" />
+                    <h3 className="text-sm font-semibold text-red-700">Resumen de Tiempos Muertos (&gt;5 min)</h3>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">Eventos</span>
+                      <span className="font-bold text-red-600 text-base">{gapSummary.deadTimeCount}</span>
                     </div>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Umbral considerado:</span>
-                        <span className="font-semibold">&gt; 5 minutos</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Eventos encontrados:</span>
-                        <span className="font-bold text-red-600">{stats.kpis.deadTimeEvents}</span>
-                      </div>
-                      <div className="border-t pt-2 flex justify-between">
-                        <span className="font-medium">Suma total:</span>
-                        <span className="font-bold text-red-600 text-base">{fmtDur(stats.kpis.totalDeadTime)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>≈ {Math.round(stats.kpis.totalDeadTime / 60)} minutos</span>
-                        <span>≈ {(stats.kpis.totalDeadTime / 3600).toFixed(1)} horas</span>
-                      </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">Suma total</span>
+                      <span className="font-bold text-red-600 text-base">{gapSummary.totalDeadTimeFormatted}</span>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">En minutos</span>
+                      <span className="font-bold text-red-700 text-base">{Math.round(gapSummary.totalDeadTimeSec / 60)} min</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">En horas</span>
+                      <span className="font-bold text-red-700 text-base">{(gapSummary.totalDeadTimeSec / 3600).toFixed(1)} h</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-                {/* Chart */}
-                <Card className="lg:col-span-2">
-                  <CardContent className="p-2 sm:p-4">
-                    <p className="text-xs font-semibold mb-1 px-2 pt-2">Tiempos Muertos por Operador (&gt;5 min)</p>
-                    <ReactEChartsCore echarts={echarts} option={chartOption} style={{ height: '300px', width: '100%' }} notMerge />
-                  </CardContent>
-                </Card>
+            {/* Tabs */}
+            {stats && !loading && (
+              <div className="flex gap-1 border-b">
+                <button
+                  onClick={() => setActiveTab('ranking')}
+                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+                    activeTab === 'ranking'
+                      ? 'border-red-500 text-red-600'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Trophy className="h-3 w-3 inline mr-1" />
+                  Ranking de Gaps
+                </button>
+                <button
+                  onClick={() => setActiveTab('operador')}
+                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+                    activeTab === 'operador'
+                      ? 'border-red-500 text-red-600'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Por Operador
+                </button>
               </div>
             )}
 
-            {/* Movements Table */}
-            {movSummary && (
+            {/* Ranking Tab */}
+            {activeTab === 'ranking' && gapSummary && (
               <Card>
                 <CardContent className="p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <h3 className="text-sm font-semibold">Todos los Movimientos</h3>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="text-muted-foreground">{movTotal.toLocaleString('es-AR')} registros</span>
-                      <span className="flex items-center gap-1">
-                        <span className="inline-block w-3 h-3 rounded-sm bg-red-100 border border-red-400"></span>
-                        Tiempo muerto (&gt;5 min): <b className="text-red-600">{movSummary.deadTimeCount}</b> eventos — <b className="text-red-600">{movSummary.totalDeadTimeFormatted}</b>
-                      </span>
-                    </div>
+                    <h3 className="text-sm font-semibold">
+                      Ranking de Tiempos Muertos (mayor a menor)
+                    </h3>
+                    <span className="text-xs text-muted-foreground">
+                      {gapTotal} gaps &gt;5 min encontrados
+                    </span>
                   </div>
 
-                  {movLoading ? (
+                  {gapLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                      <span className="ml-2 text-sm text-muted-foreground">Cargando movimientos...</span>
+                      <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+                    </div>
+                  ) : gaps.length === 0 ? (
+                    <div className="text-center py-12 text-sm text-muted-foreground">
+                      No se encontraron gaps mayores a 5 minutos
                     </div>
                   ) : (
                     <>
@@ -376,51 +353,65 @@ export default function DashboardPage() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-xs w-10">#</TableHead>
+                              <TableHead className="text-xs w-12 text-center">#</TableHead>
                               <TableHead className="text-xs">Operador</TableHead>
                               <TableHead className="text-xs">Fecha</TableHead>
-                              <TableHead className="text-xs">Hora</TableHead>
-                              <TableHead className="text-xs">Zona</TableHead>
-                              <TableHead className="text-xs">Activ.</TableHead>
-                              <TableHead className="text-xs">Producto</TableHead>
-                              <TableHead className="text-xs">Bultos</TableHead>
-                              <TableHead className="text-xs text-right">Gap</TableHead>
+                              <TableHead className="text-xs text-center" colSpan={3}>Escaneo Anterior</TableHead>
+                              <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
+                              <TableHead className="text-xs text-center" colSpan={3}>Escaneo Siguiente</TableHead>
+                            </TableRow>
+                            <TableRow>
+                              <TableHead className="text-[10px]"></TableHead>
+                              <TableHead className="text-[10px]"></TableHead>
+                              <TableHead className="text-[10px]"></TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">Hora</TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">Zona</TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">Producto</TableHead>
+                              <TableHead className="text-[10px]"></TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">Hora</TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">Zona</TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">Producto</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {movements.map((row, i) => (
-                              <TableRow
-                                key={row.id}
-                                className={row.isDeadTime ? 'bg-red-50 hover:bg-red-100/70' : ''}
-                              >
-                                <TableCell className="text-[10px] text-muted-foreground font-mono">
-                                  {(movPage - 1) * 200 + i + 1}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="text-xs font-medium leading-tight">{row.nomUti}</div>
-                                  <div className="text-[10px] text-muted-foreground">{row.codUti}</div>
-                                </TableCell>
-                                <TableCell className="text-xs">{row.fecha}</TableCell>
-                                <TableCell className="text-xs font-mono">{row.hora}</TableCell>
-                                <TableCell className="text-xs">{row.zonSts || '—'}</TableCell>
-                                <TableCell className="text-xs">{row.codAct}</TableCell>
-                                <TableCell className="text-[10px] font-mono text-muted-foreground max-w-[120px] truncate">{row.codPro}</TableCell>
-                                <TableCell className="text-xs text-center">{row.bultos}</TableCell>
-                                <TableCell className="text-right">
-                                  {row.gapSeconds !== null ? (
-                                    <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
-                                      row.isDeadTime
+                            {gaps.map((row) => {
+                              const isTop3 = row.rank <= 3;
+                              return (
+                                <TableRow
+                                  key={`${row.codUti}-${row.fecha}-${row.prevHora}-${row.currHora}`}
+                                  className={isTop3 ? 'bg-red-50 hover:bg-red-100/70' : ''}
+                                >
+                                  <TableCell className="text-center">
+                                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                      isTop3
                                         ? 'bg-red-500 text-white'
-                                        : 'text-muted-foreground'
+                                        : 'bg-slate-100 text-muted-foreground'
                                     }`}>
-                                      {fmtGap(row.gapSeconds)}
+                                      {row.rank}
                                     </span>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground/50">—</span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="text-xs font-medium leading-tight">{row.nomUti}</div>
+                                    <div className="text-[10px] text-muted-foreground">{row.codUti}</div>
+                                  </TableCell>
+                                  <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+                                  {/* Prev scan */}
+                                  <TableCell className="text-xs font-mono text-muted-foreground">{row.prevHora}</TableCell>
+                                  <TableCell className="text-xs">{row.prevZonSts || '—'}</TableCell>
+                                  <TableCell className="text-[10px] font-mono text-muted-foreground max-w-[110px] truncate">{row.prevCodPro}</TableCell>
+                                  {/* Gap */}
+                                  <TableCell className="text-center">
+                                    <span className="text-xs font-bold px-2 py-1 rounded bg-red-500 text-white whitespace-nowrap">
+                                      {fmtDur(row.gapSeconds)}
+                                    </span>
+                                  </TableCell>
+                                  {/* Current scan */}
+                                  <TableCell className="text-xs font-mono text-muted-foreground">{row.currHora}</TableCell>
+                                  <TableCell className="text-xs">{row.currZonSts || '—'}</TableCell>
+                                  <TableCell className="text-[10px] font-mono text-muted-foreground max-w-[110px] truncate">{row.currCodPro}</TableCell>
+                                </TableRow>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </div>
@@ -428,22 +419,62 @@ export default function DashboardPage() {
                       {/* Pagination */}
                       <div className="flex items-center justify-between mt-3 pt-3 border-t">
                         <span className="text-xs text-muted-foreground">
-                          Página {movPage} de {movTotalPages}
+                          Página {gapPage} de {gapTotalPages} ({gapTotal} gaps)
                         </span>
                         <div className="flex items-center gap-1">
-                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={movPage <= 1}
-                            onClick={() => fetchMovements(movPage - 1)}>
+                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage <= 1}
+                            onClick={() => fetchGaps(gapPage - 1)}>
                             <ChevronLeft className="h-3 w-3" />
                           </Button>
-                          <span className="text-xs px-2">{movPage} / {movTotalPages}</span>
-                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={movPage >= movTotalPages}
-                            onClick={() => fetchMovements(movPage + 1)}>
+                          <span className="text-xs px-2">{gapPage} / {gapTotalPages}</span>
+                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage >= gapTotalPages}
+                            onClick={() => fetchGaps(gapPage + 1)}>
                             <ChevronRight className="h-3 w-3" />
                           </Button>
                         </div>
                       </div>
                     </>
                   )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Operador Tab */}
+            {activeTab === 'operador' && stats && stats.byOperator.length > 0 && (
+              <Card>
+                <CardContent className="p-4">
+                  <h3 className="text-sm font-semibold mb-3">Tiempos Muertos por Operador</h3>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">#</TableHead>
+                          <TableHead className="text-xs">Operador</TableHead>
+                          <TableHead className="text-xs text-right">Total (min)</TableHead>
+                          <TableHead className="text-xs text-right">Eventos</TableHead>
+                          <TableHead className="text-xs text-right">Mayor Gap</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {stats.byOperator.map((op, i) => (
+                          <TableRow key={op.codUti} className={i < 3 ? 'bg-red-50 hover:bg-red-100/70' : ''}>
+                            <TableCell className="text-xs font-mono text-muted-foreground">{i + 1}</TableCell>
+                            <TableCell>
+                              <div className="text-xs font-medium">{op.nomUti}</div>
+                              <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+                            </TableCell>
+                            <TableCell className="text-xs text-right font-bold">
+                              <span className={op.totalMin > 30 ? 'text-red-600' : op.totalMin > 15 ? 'text-orange-500' : ''}>
+                                {op.totalMin} min
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-xs text-right">{op.events}</TableCell>
+                            <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -454,7 +485,7 @@ export default function DashboardPage() {
       <footer className="mt-auto border-t bg-white/60">
         <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6">
           <p className="text-center text-[10px] text-muted-foreground">
-            Umbral: &gt;5 min = tiempo muerto — Next.js + SQLite + ECharts
+            Umbral: &gt;5 min = tiempo muerto — Next.js + SQLite
           </p>
         </div>
       </footer>
