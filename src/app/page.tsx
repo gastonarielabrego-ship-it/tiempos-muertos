@@ -12,7 +12,7 @@ import {
 import {
   Upload, RefreshCw, Clock, BarChart3, AlertTriangle,
   Loader2, Database, Timer, ChevronLeft, ChevronRight,
-  X, ArrowDown, Trophy, ArrowRight, User,
+  X, ArrowDown, Trophy, ArrowRight, User, Sun, Sunset, Moon,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -25,12 +25,19 @@ interface KPIs {
   maxGap: number;
 }
 
+interface ShiftData {
+  TM: { sec: number; events: number };
+  TT: { sec: number; events: number };
+  TN: { sec: number; events: number };
+}
+
 interface OpStat {
   codUti: string;
   nomUti: string;
   totalMin: number;
   events: number;
   maxGap: number;
+  turno: string;
 }
 
 interface GapRow {
@@ -39,6 +46,7 @@ interface GapRow {
   nomUti: string;
   fecha: string;
   gapSeconds: number;
+  turno: string;
   prevHora: string;
   prevZonSts: string | null;
   prevCodAct: number;
@@ -65,9 +73,23 @@ function fmtDur(s: number): string {
   return `${sec}s`;
 }
 
+function TurnoBadge({ turno }: { turno: string }) {
+  const config: Record<string, { bg: string; text: string; icon: React.ReactNode; label: string }> = {
+    TM: { bg: 'bg-amber-100', text: 'text-amber-800', icon: <Sun className="h-3 w-3" />, label: 'TM' },
+    TT: { bg: 'bg-orange-100', text: 'text-orange-800', icon: <Sunset className="h-3 w-3" />, label: 'TT' },
+    TN: { bg: 'bg-indigo-100', text: 'text-indigo-800', icon: <Moon className="h-3 w-3" />, label: 'TN' },
+  };
+  const c = config[turno] || config.TM;
+  return (
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${c.bg} ${c.text}`}>
+      {c.icon} {c.label}
+    </span>
+  );
+}
+
 // --- Main Page ---
 export default function DashboardPage() {
-  const [stats, setStats] = useState<{ kpis: KPIs; byOperator: OpStat[] } | null>(null);
+  const [stats, setStats] = useState<{ kpis: KPIs; byShift: ShiftData; byOperator: OpStat[] } | null>(null);
   const [filters, setFilters] = useState<Filters | null>(null);
   const [gaps, setGaps] = useState<GapRow[]>([]);
   const [gapSummary, setGapSummary] = useState<{ totalDeadTimeSec: number; totalDeadTimeFormatted: string; deadTimeCount: number } | null>(null);
@@ -109,14 +131,13 @@ export default function DashboardPage() {
     }
   }, [selectedOp, toast]);
 
-  const fetchGaps = useCallback(async (page: number, op?: string) => {
+  const fetchGaps = useCallback(async (page: number) => {
     setGapLoading(true);
     try {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('pageSize', '50');
-      const operator = op ?? selectedOp;
-      if (operator !== 'all') params.set('operator', operator);
+      if (selectedOp !== 'all') params.set('operator', selectedOp);
       const res = await fetch(`/api/movements?${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -133,13 +154,11 @@ export default function DashboardPage() {
   }, [selectedOp, toast]);
 
   useEffect(() => { fetchFilters(); }, [fetchFilters]);
-
   useEffect(() => {
     if (hasData) { fetchStats(); fetchGaps(1); }
     else { setLoading(false); }
-  }, [fetchStats, hasData]);
+  }, [fetchStats, hasData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When selectedOp changes, refetch
   useEffect(() => {
     if (hasData) {
       fetchStats();
@@ -152,9 +171,7 @@ export default function DashboardPage() {
   const handleOpChange = (val: string) => {
     setSelectedOp(val);
     setGapPage(1);
-    if (val !== 'all') {
-      setActiveTab('operador');
-    }
+    if (val !== 'all') setActiveTab('operador');
   };
 
   const handleOperatorClick = (codUti: string) => {
@@ -186,7 +203,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Get operator name for the selected one
   const selectedOpName = selectedOp !== 'all'
     ? (stats?.byOperator.find(o => o.codUti === selectedOp)?.nomUti ?? filters?.operators.find(o => o.codUti === selectedOp)?.nomUti ?? selectedOp)
     : null;
@@ -297,43 +313,74 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Summary box */}
-            {gapSummary && selectedOp === 'all' && (
-              <Card className="border-red-200 bg-red-50/50">
-                <CardContent className="p-4 sm:p-5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <ArrowDown className="h-4 w-4 text-red-500" />
-                    <h3 className="text-sm font-semibold text-red-700">Resumen de Tiempos Muertos (&gt;5 min)</h3>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">Eventos</span>
-                      <span className="font-bold text-red-600 text-base">{gapSummary.deadTimeCount}</span>
+            {/* Summary box + Shift breakdown */}
+            {stats && !loading && selectedOp === 'all' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <Card className="border-red-200 bg-red-50/50">
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ArrowDown className="h-4 w-4 text-red-500" />
+                      <h3 className="text-sm font-semibold text-red-700">Resumen (&gt;5 min)</h3>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">Suma total</span>
-                      <span className="font-bold text-red-600 text-base">{gapSummary.totalDeadTimeFormatted}</span>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block">Eventos</span>
+                        <span className="font-bold text-red-600 text-base">{stats.kpis.deadTimeEvents}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block">Suma total</span>
+                        <span className="font-bold text-red-600 text-base">{fmtDur(stats.kpis.totalDeadTime)}</span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">En minutos</span>
-                      <span className="font-bold text-red-700 text-base">{Math.round(gapSummary.totalDeadTimeSec / 60)} min</span>
+                  </CardContent>
+                </Card>
+
+                {/* Shift breakdown */}
+                <Card className="lg:col-span-2">
+                  <CardContent className="p-4 sm:p-5">
+                    <h3 className="text-sm font-semibold mb-3">Por Turno</h3>
+                    <p className="text-[10px] text-muted-foreground mb-3">
+                      Turno asignado por primer escaneo del día: TM (6-10hs), TT (10-18hs), TN (resto)
+                    </p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Sun className="h-3.5 w-3.5 text-amber-600" />
+                          <span className="text-xs font-bold text-amber-800">TM (Mañana)</span>
+                        </div>
+                        <p className="text-lg font-bold text-amber-900">{fmtDur(stats.byShift.TM.sec)}</p>
+                        <p className="text-[10px] text-amber-600">{stats.byShift.TM.events} eventos · {Math.round(stats.byShift.TM.sec / 60)} min</p>
+                      </div>
+                      <div className="rounded-lg bg-orange-50 border border-orange-200 p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Sunset className="h-3.5 w-3.5 text-orange-600" />
+                          <span className="text-xs font-bold text-orange-800">TT (Tarde)</span>
+                        </div>
+                        <p className="text-lg font-bold text-orange-900">{fmtDur(stats.byShift.TT.sec)}</p>
+                        <p className="text-[10px] text-orange-600">{stats.byShift.TT.events} eventos · {Math.round(stats.byShift.TT.sec / 60)} min</p>
+                      </div>
+                      <div className="rounded-lg bg-indigo-50 border border-indigo-200 p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Moon className="h-3.5 w-3.5 text-indigo-600" />
+                          <span className="text-xs font-bold text-indigo-800">TN (Noche)</span>
+                        </div>
+                        <p className="text-lg font-bold text-indigo-900">{fmtDur(stats.byShift.TN.sec)}</p>
+                        <p className="text-[10px] text-indigo-600">{stats.byShift.TN.events} eventos · {Math.round(stats.byShift.TN.sec / 60)} min</p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">En horas</span>
-                      <span className="font-bold text-red-700 text-base">{(gapSummary.totalDeadTimeSec / 3600).toFixed(1)} h</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </div>
             )}
 
-            {/* Operator detail summary (when one is selected) */}
+            {/* Operator detail summary */}
             {selectedOp !== 'all' && selectedOpStats && gapSummary && (
               <Card className="border-red-200 bg-red-50/50">
                 <CardContent className="p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <User className="h-4 w-4 text-red-500" />
                     <h3 className="text-sm font-semibold text-red-700">{selectedOpName}</h3>
+                    <TurnoBadge turno={selectedOpStats.turno} />
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                     <div>
@@ -361,7 +408,7 @@ export default function DashboardPage() {
             {stats && !loading && (
               <div className="flex gap-1 border-b">
                 <button
-                  onClick={() => { setActiveTab('ranking'); if (selectedOp !== 'all') { /* keep filter */ } }}
+                  onClick={() => setActiveTab('ranking')}
                   className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
                     activeTab === 'ranking'
                       ? 'border-red-500 text-red-600'
@@ -399,15 +446,16 @@ export default function DashboardPage() {
                       Ranking por Suma de Tiempo Muerto
                     </h3>
                     <span className="text-xs text-muted-foreground">
-                      {stats.byOperator.length} operadores con tiempos muertos
+                      {stats.byOperator.length} operadores
                     </span>
                   </div>
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="text-xs w-14 text-center">#</TableHead>
+                          <TableHead className="text-xs w-12 text-center">#</TableHead>
                           <TableHead className="text-xs">Operador</TableHead>
+                          <TableHead className="text-xs text-center">Turno</TableHead>
                           <TableHead className="text-xs text-right">Tiempo Total</TableHead>
                           <TableHead className="text-xs text-right">Minutos</TableHead>
                           <TableHead className="text-xs text-right">Eventos</TableHead>
@@ -437,6 +485,9 @@ export default function DashboardPage() {
                                 <div className="text-xs font-medium">{op.nomUti}</div>
                                 <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
                               </TableCell>
+                              <TableCell className="text-center">
+                                <TurnoBadge turno={op.turno} />
+                              </TableCell>
                               <TableCell className="text-xs text-right font-bold">
                                 <span className={isTop3 ? 'text-red-600' : op.totalMin > 100 ? 'text-orange-600' : ''}>
                                   {fmtDur(op.totalMin * 60)}
@@ -463,7 +514,6 @@ export default function DashboardPage() {
             {/* ===================== POR OPERADOR TAB ===================== */}
             {activeTab === 'operador' && (
               selectedOp === 'all' ? (
-                /* No operator selected - show message */
                 <Card>
                   <CardContent className="flex flex-col items-center py-12">
                     <User className="h-10 w-10 text-muted-foreground/30 mb-3" />
@@ -471,7 +521,6 @@ export default function DashboardPage() {
                   </CardContent>
                 </Card>
               ) : (
-                /* Operator selected - show gap details */
                 <Card>
                   <CardContent className="p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -500,12 +549,14 @@ export default function DashboardPage() {
                               <TableRow>
                                 <TableHead className="text-xs w-10 text-center">#</TableHead>
                                 <TableHead className="text-xs">Fecha</TableHead>
+                                <TableHead className="text-xs text-center w-14">Turno</TableHead>
                                 <TableHead className="text-xs text-center bg-blue-50" colSpan={3}>Pickeo Previo</TableHead>
                                 <TableHead className="text-xs text-center">Trayecto</TableHead>
                                 <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
                                 <TableHead className="text-xs text-center bg-green-50" colSpan={3}>Pickeo Posterior</TableHead>
                               </TableRow>
                               <TableRow>
+                                <TableHead className="text-[10px]"></TableHead>
                                 <TableHead className="text-[10px]"></TableHead>
                                 <TableHead className="text-[10px]"></TableHead>
                                 <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
@@ -535,6 +586,9 @@ export default function DashboardPage() {
                                       </span>
                                     </TableCell>
                                     <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+                                    <TableCell className="text-center">
+                                      <TurnoBadge turno={row.turno} />
+                                    </TableCell>
                                     {/* Prev pick */}
                                     <TableCell className="text-xs font-mono text-muted-foreground bg-blue-50/50">{row.prevHora}</TableCell>
                                     <TableCell className="text-xs bg-blue-50/50">
@@ -610,7 +664,7 @@ export default function DashboardPage() {
       <footer className="mt-auto border-t bg-white/60">
         <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6">
           <p className="text-center text-[10px] text-muted-foreground">
-            Umbral: &gt;5 min = tiempo muerto — Next.js + SQLite
+            Umbral: &gt;5 min = tiempo muerto — TM (6-10hs) TT (10-18hs) TN (resto)
           </p>
         </div>
       </footer>

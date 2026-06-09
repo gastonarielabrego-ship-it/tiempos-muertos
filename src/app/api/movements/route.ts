@@ -4,6 +4,17 @@ import { Prisma } from '@prisma/client';
 
 const DEAD_TIME_THRESHOLD = 300; // 5 minutos
 
+type Turno = 'TM' | 'TT' | 'TN';
+
+function getTurno(hora: string): Turno {
+  const parts = hora.split(':').map(Number);
+  const totalMin = parts[0] * 60 + parts[1];
+  if (totalMin < 6 * 60) return 'TN';   // antes de 6 AM
+  if (totalMin < 10 * 60) return 'TM';  // 6 AM a 10 AM
+  if (totalMin < 18 * 60) return 'TT';  // 10 AM a 18 PM
+  return 'TN';                           // 18 PM en adelante
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -38,13 +49,12 @@ export async function GET(request: NextRequest) {
       nomUti: string;
       fecha: string;
       gapSeconds: number;
-      // Previous scan info
+      turno: Turno;
       prevHora: string;
       prevZonSts: string | null;
       prevCodAct: number;
       prevCodPro: string;
       prevBultos: number;
-      // Current scan info (after the gap)
       currHora: string;
       currZonSts: string | null;
       currCodAct: number;
@@ -56,6 +66,9 @@ export async function GET(request: NextRequest) {
     let totalDeadTimeSec = 0;
 
     for (const [, dayScans] of grouped) {
+      // Determine shift from first scan of the day
+      const turno: Turno = getTurno(dayScans[0].hora);
+
       for (let i = 1; i < dayScans.length; i++) {
         const prev = dayScans[i - 1];
         const curr = dayScans[i];
@@ -66,11 +79,12 @@ export async function GET(request: NextRequest) {
         if (gap > DEAD_TIME_THRESHOLD) {
           totalDeadTimeSec += gap;
           gaps.push({
-            rank: 0, // will be set after sorting
+            rank: 0,
             codUti: curr.codUti,
             nomUti: curr.nomUti,
             fecha: curr.fecha.toISOString().split('T')[0],
             gapSeconds: gap,
+            turno,
             prevHora: prev.hora,
             prevZonSts: prev.zonSts,
             prevCodAct: prev.codAct,
