@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClient } from '@/lib/db';
-import { Prisma } from '@prisma/client';
+import { db } from '@/lib/db';
 
 const DEAD_TIME_THRESHOLD = 300;
 
@@ -17,33 +16,19 @@ function getTurno(hora: string): Turno {
 
 export async function GET(request: NextRequest) {
   try {
-    const db = await getClient();
     const { searchParams } = new URL(request.url);
     const operator = searchParams.get('operator') || 'all';
     const turnoFilter = searchParams.get('turno');
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '100');
 
-    const where: Prisma.ScanRecordWhereInput = {};
+    const where: Record<string, unknown> = {};
     if (operator !== 'all') where.codUti = operator;
 
     const allScans = await db.scanRecord.findMany({
-      where,
+      where: Object.keys(where).length > 0 ? where : undefined,
       orderBy: [{ codUti: 'asc' }, { fecha: 'asc' }, { hora: 'asc' }],
-      select: {
-        id: true, codUti: true, nomUti: true, fecha: true, hora: true,
-        codAct: true, zonSts: true, allSts: true, dplSts: true, nivSts: true,
-        codPro: true, pcbPro: true, bultos: true,
-      },
     });
-
-    // Group by operator + date
-    const grouped = new Map<string, typeof allScans>();
-    for (const s of allScans) {
-      const key = `${s.codUti}|${s.fecha.toISOString().split('T')[0]}`;
-      if (!grouped.has(key)) grouped.set(key, []);
-      grouped.get(key)!.push(s);
-    }
 
     interface GapRow {
       rank: number;
@@ -64,13 +49,19 @@ export async function GET(request: NextRequest) {
       currBultos: number;
     }
 
+    const grouped = new Map<string, typeof allScans>();
+    for (const s of allScans) {
+      const fechaStr = s.fecha instanceof Date ? s.fecha.toISOString().split('T')[0] : String(s.fecha).split('T')[0];
+      const key = `${s.codUti}|${fechaStr}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(s);
+    }
+
     const gaps: GapRow[] = [];
     let totalDeadTimeSec = 0;
 
     for (const [, dayScans] of grouped) {
       const turno: Turno = getTurno(dayScans[0].hora);
-
-      // Skip if turno filter doesn't match
       if (turnoFilter && turno !== turnoFilter) continue;
 
       for (let i = 1; i < dayScans.length; i++) {
@@ -86,7 +77,7 @@ export async function GET(request: NextRequest) {
             rank: 0,
             codUti: curr.codUti,
             nomUti: curr.nomUti,
-            fecha: curr.fecha.toISOString().split('T')[0],
+            fecha: curr.fecha instanceof Date ? curr.fecha.toISOString().split('T')[0] : String(curr.fecha).split('T')[0],
             gapSeconds: gap,
             turno,
             prevHora: prev.hora,

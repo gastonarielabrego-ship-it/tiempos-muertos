@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClient } from '@/lib/db';
+import { db } from '@/lib/db';
 import * as XLSX from 'xlsx';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
 export async function POST(request: NextRequest) {
   try {
-    const db = await getClient();
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
@@ -24,7 +23,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'El archivo está vacío o no tiene datos' }, { status: 400 });
     }
 
-    // Validate columns
     const required = ['CODUTI', 'NOMUTI', 'FECHA', 'HORA', 'CODACT', 'ZONSTS', 'ALLSTS', 'DPLSTS', 'NIVSTS', 'CODPRO', 'PCBPRO', 'BULTOS'];
     const firstRow = rows[0];
     const missing = required.filter(col => !(col in firstRow));
@@ -32,7 +30,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Faltan columnas: ${missing.join(', ')}` }, { status: 400 });
     }
 
-    // Delete existing data and insert new
     await db.scanRecord.deleteMany({});
 
     const records = rows.map(row => {
@@ -41,7 +38,6 @@ export async function POST(request: NextRequest) {
       if (rawFecha instanceof Date) {
         fecha = rawFecha;
       } else if (typeof rawFecha === 'number') {
-        // Excel serial date
         const excelEpoch = new Date(1899, 11, 30);
         fecha = new Date(excelEpoch.getTime() + rawFecha * 86400000);
       } else if (typeof rawFecha === 'string') {
@@ -52,7 +48,6 @@ export async function POST(request: NextRequest) {
 
       let hora = '';
       if (rawFecha instanceof Date && row['HORA']) {
-        // HORA might be a time object - reconstruct from the datetime
         const rawHora = row['HORA'];
         if (typeof rawHora === 'number') {
           const totalSeconds = Math.floor(rawHora * 86400);
@@ -83,19 +78,12 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // Insert in batches of 2000 for performance
-    const BATCH_SIZE = 2000;
-    let inserted = 0;
-    for (let i = 0; i < records.length; i += BATCH_SIZE) {
-      const batch = records.slice(i, i + BATCH_SIZE);
-      await db.scanRecord.createMany({ data: batch });
-      inserted += batch.length;
-    }
+    const result = await db.scanRecord.createMany({ data: records as any });
 
     return NextResponse.json({
       success: true,
       message: `Datos cargados exitosamente`,
-      totalRecords: inserted,
+      totalRecords: result.count,
     });
   } catch (error) {
     console.error('Error uploading file:', error);

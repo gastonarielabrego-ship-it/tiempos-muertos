@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClient } from '@/lib/db';
-import { Prisma } from '@prisma/client';
+import { db } from '@/lib/db';
 
 type Turno = 'TM' | 'TT' | 'TN';
 
@@ -24,43 +23,35 @@ interface PickRow {
   fecha: string;
   turno: Turno;
   totalScans: number;
-  // Primer pikeo
   primerHora: string;
   primerZona: string | null;
   primerProducto: string;
-  // Último pikeo
   ultimoHora: string;
   ultimoZona: string | null;
   ultimoProducto: string;
-  // Jornada
   jornadaSec: number;
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const db = await getClient();
     const { searchParams } = new URL(request.url);
     const operator = searchParams.get('operator') || 'all';
     const turnoFilter = searchParams.get('turno');
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '100');
 
-    const where: Prisma.ScanRecordWhereInput = {};
+    const where: Record<string, unknown> = {};
     if (operator !== 'all') where.codUti = operator;
 
     const allScans = await db.scanRecord.findMany({
-      where,
+      where: Object.keys(where).length > 0 ? where : undefined,
       orderBy: [{ codUti: 'asc' }, { fecha: 'asc' }, { hora: 'asc' }],
-      select: {
-        codUti: true, nomUti: true, fecha: true, hora: true,
-        zonSts: true, codPro: true,
-      },
     });
 
-    // Group by operator + date
     const grouped = new Map<string, typeof allScans>();
     for (const s of allScans) {
-      const key = `${s.codUti}|${s.fecha.toISOString().split('T')[0]}`;
+      const fechaStr = s.fecha instanceof Date ? s.fecha.toISOString().split('T')[0] : String(s.fecha).split('T')[0];
+      const key = `${s.codUti}|${fechaStr}`;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(s);
     }
@@ -77,7 +68,7 @@ export async function GET(request: NextRequest) {
       rows.push({
         codUti: first.codUti,
         nomUti: first.nomUti,
-        fecha: first.fecha.toISOString().split('T')[0],
+        fecha: first.fecha instanceof Date ? first.fecha.toISOString().split('T')[0] : String(first.fecha).split('T')[0],
         turno,
         totalScans: dayScans.length,
         primerHora: first.hora,
@@ -90,7 +81,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Sort by date desc, then operator name
     rows.sort((a, b) => {
       if (a.fecha !== b.fecha) return b.fecha.localeCompare(a.fecha);
       return a.nomUti.localeCompare(b.nomUti);
@@ -107,6 +97,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error fetching picks:', error);
-    return NextResponse.json({ error: 'Error al obtener picks' }, { status: 500 });
+    return NextResponse.json({ error: 'Error al obtener selecciones' }, { status: 500 });
   }
 }

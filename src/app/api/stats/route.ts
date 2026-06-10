@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClient } from '@/lib/db';
-import { Prisma } from '@prisma/client';
+import { db } from '@/lib/db';
 
-const DEAD_TIME_THRESHOLD = 300; // 5 minutos
+const DEAD_TIME_THRESHOLD = 300;
 
 type Turno = 'TM' | 'TT' | 'TN';
 
@@ -17,16 +16,15 @@ function getTurno(hora: string): Turno {
 
 export async function GET(request: NextRequest) {
   try {
-    const db = await getClient();
     const { searchParams } = new URL(request.url);
     const operator = searchParams.get('operator');
-    const turnoFilter = searchParams.get('turno'); // TM, TT, TN, or null
+    const turnoFilter = searchParams.get('turno');
 
-    const where: Prisma.ScanRecordWhereInput = {};
+    const where: Record<string, unknown> = {};
     if (operator) where.codUti = operator;
 
     const scans = await db.scanRecord.findMany({
-      where,
+      where: Object.keys(where).length > 0 ? where : undefined,
       orderBy: [{ codUti: 'asc' }, { fecha: 'asc' }, { hora: 'asc' }],
     });
 
@@ -38,10 +36,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Group by operator + date
     const grouped = new Map<string, typeof scans>();
     for (const s of scans) {
-      const key = `${s.codUti}|${s.fecha.toISOString().split('T')[0]}`;
+      const fechaStr = s.fecha instanceof Date ? s.fecha.toISOString().split('T')[0] : String(s.fecha).split('T')[0];
+      const key = `${s.codUti}|${fechaStr}`;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(s);
     }
@@ -66,7 +64,6 @@ export async function GET(request: NextRequest) {
       const firstScan = dayScans[0];
       const turno: Turno = getTurno(firstScan.hora);
 
-      // Skip this group if turno filter is set and doesn't match
       if (turnoFilter && turno !== turnoFilter) continue;
 
       for (let i = 1; i < dayScans.length; i++) {
