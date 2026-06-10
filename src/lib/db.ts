@@ -91,9 +91,23 @@ export const db = {
         const orderDir = orderBy ? (Object.values(orderBy)[0] === 'desc' ? 'DESC' : 'ASC') : 'ASC';
 
         if (distinct) {
-          const sql = `SELECT DISTINCT "${distinct}" as "${distinct}" FROM "ScanRecord" ORDER BY "${distinct}" ${orderDir}`;
+          const selectCols = args?.select ? Object.keys(args.select) : [distinct];
+          const selectedCols = selectCols.map(c => {
+            if (c === distinct) return `"${c}"`;
+            return `MAX("${c}") as "${c}"`;
+          }).join(', ');
+          const sql = `SELECT ${selectedCols} FROM "ScanRecord" GROUP BY "${distinct}" ORDER BY "${distinct}" ${orderDir}`;
           const result = await tursoQuery(sql);
-          return result.rows.map(r => ({ [distinct]: r[distinct], fecha: new Date(), hora: '', codUti: '', nomUti: '', codAct: 0, allSts: 0, dplSts: 0, nivSts: 0, codPro: '', pcbPro: 0, bultos: 0, createdAt: new Date() } as unknown as ScanRecordRow));
+          return result.rows.map(r => {
+            const row: Record<string, unknown> = {};
+            for (const c of selectCols) { row[c] = r[c]; }
+            for (const f of ['fecha','hora','codUti','nomUti','codAct','allSts','dplSts','nivSts','codPro','pcbPro','bultos','createdAt']) {
+              if (!(f in row)) {
+                row[f] = (f === 'createdAt' || f === 'fecha') ? new Date() : (['codAct','allSts','dplSts','nivSts','pcbPro','bultos'].includes(f) ? 0 : '');
+              }
+            }
+            return row as unknown as ScanRecordRow;
+          });
         }
 
         let sql = 'SELECT * FROM "ScanRecord"';

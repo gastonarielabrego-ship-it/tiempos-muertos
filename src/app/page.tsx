@@ -315,7 +315,7 @@ export default function DashboardPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los operadores</SelectItem>
-                  {filters?.operators.map(o => (
+                  {filters?.operators.filter(o => o.codUti.trim()).map(o => (
                     <SelectItem key={o.codUti} value={o.codUti}>{o.nomUti}</SelectItem>
                   ))}
                 </SelectContent>
