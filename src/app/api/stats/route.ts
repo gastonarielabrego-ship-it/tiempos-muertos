@@ -105,12 +105,19 @@ export async function GET(request: NextRequest) {
         const predTurno: Turno = (['TM', 'TT', 'TN'] as Turno[]).sort(
           (a, b) => d.turnos[b] - d.turnos[a]
         )[0];
+        const brutoMin = Math.round((d.deadSec / 60) * 10) / 10;
+        const descansoBruto = d.dias.size * 60;
+        const descansoReal = Math.min(descansoBruto, brutoMin);
+        const netoMin = Math.round((brutoMin - descansoReal) * 10) / 10;
         return {
           codUti: cod,
           nomUti: d.name,
-          totalMin: Math.round((d.deadSec / 60) * 10) / 10,
-          descansoMin: d.dias.size * 60,
-          totalNetoMin: Math.round(((d.deadSec / 60) - (d.dias.size * 60)) * 10) / 10,
+          totalMin: brutoMin,
+          totalMinSec: Math.round(brutoMin * 60),
+          descansoMin: descansoReal,
+          descansoMinSec: descansoReal * 60,
+          totalNetoMin: netoMin,
+          totalNetoMinSec: Math.round(netoMin * 60),
           diasTrabajados: d.dias.size,
           events: d.events,
           maxGap: d.maxSec,

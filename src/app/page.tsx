@@ -36,8 +36,11 @@ interface OpStat {
   codUti: string;
   nomUti: string;
   totalMin: number;
+  totalMinSec: number;
   descansoMin: number;
+  descansoMinSec: number;
   totalNetoMin: number;
+  totalNetoMinSec: number;
   diasTrabajados: number;
   events: number;
   maxGap: number;
@@ -466,32 +469,31 @@ export default function DashboardPage() {
             {selectedOp !== 'all' && selectedOpStats && gapSummary && (
               <Card className="border-red-200 bg-red-50/50">
                 <CardContent className="p-4 sm:p-5">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-3">
                     <User className="h-4 w-4 text-red-500" />
                     <h3 className="text-sm font-semibold text-red-700">{selectedOpName}</h3>
                     <TurnoBadge turno={selectedOpStats.turno} />
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">Eventos</span>
-                      <span className="font-bold text-red-600 text-base">{gapSummary.deadTimeCount}</span>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-red-100">
+                      <span className="text-[10px] text-muted-foreground">Tiempo Muerto</span>
+                      <span className="text-xs text-right font-bold text-red-600">{fmtDur(selectedOpStats.totalMinSec)}</span>
+                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.totalMin} min</span>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">Tiempo Muerto</span>
-                      <span className="font-bold text-red-600 text-base">{gapSummary.totalDeadTimeFormatted}</span>
+                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-slate-200">
+                      <span className="text-[10px] text-muted-foreground">Descanso</span>
+                      <span className="text-xs text-right font-medium text-slate-500">{selectedOpStats.descansoMin > 0 ? `-${fmtDur(selectedOpStats.descansoMinSec)}` : '—'}</span>
+                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.descansoMin > 0 ? `-${selectedOpStats.descansoMin} min (${selectedOpStats.diasTrabajados}d x 60m)` : '—'}</span>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">Descanso</span>
-                      <span className="font-bold text-slate-500 text-base">-{selectedOpStats.descansoMin} min</span>
-                      <span className="text-[9px] text-muted-foreground ml-1">({selectedOpStats.diasTrabajados} dia{selectedOpStats.diasTrabajados !== 1 ? 's' : ''} x 60m)</span>
+                    <div className="grid grid-cols-3 gap-2 items-center py-1.5 bg-green-50/60 rounded px-1">
+                      <span className="text-[10px] font-semibold text-green-700">Tiempo Neto</span>
+                      <span className="text-xs text-right font-bold text-green-700">{fmtDur(selectedOpStats.totalNetoMinSec)}</span>
+                      <span className="text-[10px] text-right text-green-600">{selectedOpStats.totalNetoMin} min</span>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">Tiempo Neto</span>
-                      <span className="font-bold text-base">{selectedOpStats.totalNetoMin} min</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">Mayor gap</span>
-                      <span className="font-bold text-red-700 text-base">{fmtDur(selectedOpStats.maxGap)}</span>
+                    <div className="grid grid-cols-3 gap-2 items-center pt-1 border-t border-slate-200">
+                      <span className="text-[10px] text-muted-foreground">Eventos / Mayor gap</span>
+                      <span className="text-xs text-right font-bold">{gapSummary.deadTimeCount} eventos</span>
+                      <span className="text-xs text-right font-mono text-red-700">{fmtDur(selectedOpStats.maxGap)}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -579,15 +581,15 @@ export default function DashboardPage() {
                               <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
                               <TableCell className="text-xs text-right font-bold">
                                 <span className={isTop3 ? 'text-red-600' : op.totalMin > 100 ? 'text-orange-600' : ''}>
-                                  {op.totalMin} min
+                                  {fmtDur(op.totalMinSec)}
                                 </span>
                               </TableCell>
                               <TableCell className="text-right">
-                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">-{op.descansoMin}m</span>
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{op.descansoMin > 0 ? `-${fmtDur(op.descansoMinSec)}` : '—'}</span>
                               </TableCell>
                               <TableCell className="text-xs text-right font-bold">
-                                <span className={op.totalNetoMin < 0 ? 'text-green-600' : 'text-foreground'}>
-                                  {op.totalNetoMin} min
+                                <span className="text-green-700">
+                                  {fmtDur(op.totalNetoMinSec)}
                                 </span>
                               </TableCell>
                               <TableCell className="text-xs text-right">{op.events}</TableCell>
