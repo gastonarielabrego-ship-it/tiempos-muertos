@@ -36,6 +36,9 @@ interface OpStat {
   codUti: string;
   nomUti: string;
   totalMin: number;
+  descansoMin: number;
+  totalNetoMin: number;
+  diasTrabajados: number;
   events: number;
   maxGap: number;
   turno: string;
@@ -79,6 +82,7 @@ interface PickRow {
 
 interface Filters {
   operators: { codUti: string; nomUti: string }[];
+  dates: string[];
   totalRecords: number;
 }
 
@@ -129,6 +133,7 @@ export default function DashboardPage() {
   const [uploading, setUploading] = useState(false);
   const [selectedOp, setSelectedOp] = useState<string>('all');
   const [selectedTurno, setSelectedTurno] = useState<string>('all');
+  const [selectedDate, setSelectedDate] = useState<string>('all');
   const [hasData, setHasData] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('ranking');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,12 +149,17 @@ export default function DashboardPage() {
     } catch { /* silent */ }
   }, []);
 
+  const addCommonParams = (params: URLSearchParams) => {
+    if (selectedOp !== 'all') params.set('operator', selectedOp);
+    if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+    if (selectedDate !== 'all') params.set('fecha', selectedDate);
+  };
+
   const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (selectedOp !== 'all') params.set('operator', selectedOp);
-      if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+      addCommonParams(params);
       const res = await fetch(`/api/stats?${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -159,7 +169,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedOp, selectedTurno, toast]);
+  }, [selectedOp, selectedTurno, selectedDate, toast]);
 
   const fetchGaps = useCallback(async (page: number) => {
     setGapLoading(true);
@@ -167,8 +177,7 @@ export default function DashboardPage() {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('pageSize', '50');
-      if (selectedOp !== 'all') params.set('operator', selectedOp);
-      if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+      addCommonParams(params);
       const res = await fetch(`/api/movements?${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -182,7 +191,7 @@ export default function DashboardPage() {
     } finally {
       setGapLoading(false);
     }
-  }, [selectedOp, selectedTurno, toast]);
+  }, [selectedOp, selectedTurno, selectedDate, toast]);
 
   const fetchPicks = useCallback(async (page: number) => {
     setPicksLoading(true);
@@ -190,8 +199,7 @@ export default function DashboardPage() {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('pageSize', '100');
-      if (selectedOp !== 'all') params.set('operator', selectedOp);
-      if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+      addCommonParams(params);
       const res = await fetch(`/api/picks?${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -204,7 +212,7 @@ export default function DashboardPage() {
     } finally {
       setPicksLoading(false);
     }
-  }, [selectedOp, selectedTurno, toast]);
+  }, [selectedOp, selectedTurno, selectedDate, toast]);
 
   useEffect(() => { fetchFilters(); }, [fetchFilters]);
 
@@ -218,7 +226,7 @@ export default function DashboardPage() {
     fetchStats();
     if (activeTab === 'operador' && selectedOp !== 'all') fetchGaps(1);
     if (activeTab === 'picks') fetchPicks(1);
-  }, [selectedOp, selectedTurno, activeTab, hasData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedOp, selectedTurno, selectedDate, activeTab, hasData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpChange = (val: string) => {
     setSelectedOp(val);
@@ -229,6 +237,12 @@ export default function DashboardPage() {
 
   const handleTurnoChange = (val: string) => {
     setSelectedTurno(val);
+    setGapPage(1);
+    setPicksPage(1);
+  };
+
+  const handleDateChange = (val: string) => {
+    setSelectedDate(val);
     setGapPage(1);
     setPicksPage(1);
   };
@@ -253,6 +267,7 @@ export default function DashboardPage() {
       setHasData(true);
       setSelectedOp('all');
       setSelectedTurno('all');
+      setSelectedDate('all');
       setActiveTab('ranking');
       await fetchFilters();
     } catch (err) {
@@ -336,8 +351,21 @@ export default function DashboardPage() {
                 </SelectContent>
               </Select>
 
-              {(selectedOp !== 'all' || selectedTurno !== 'all') && (
-                <Button variant="ghost" size="sm" onClick={() => { setSelectedOp('all'); setSelectedTurno('all'); setActiveTab('ranking'); }} className="h-8 text-xs">
+              <span className="text-xs font-medium text-muted-foreground ml-2">Fecha:</span>
+              <Select value={selectedDate} onValueChange={handleDateChange}>
+                <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las fechas</SelectItem>
+                  {filters?.dates.map(d => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {(selectedOp !== 'all' || selectedTurno !== 'all' || selectedDate !== 'all') && (
+                <Button variant="ghost" size="sm" onClick={() => { setSelectedOp('all'); setSelectedTurno('all'); setSelectedDate('all'); setActiveTab('ranking'); }} className="h-8 text-xs">
                   <X className="h-3 w-3 mr-1" />Limpiar
                 </Button>
               )}
@@ -443,18 +471,23 @@ export default function DashboardPage() {
                     <h3 className="text-sm font-semibold text-red-700">{selectedOpName}</h3>
                     <TurnoBadge turno={selectedOpStats.turno} />
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
                     <div>
                       <span className="text-[10px] text-muted-foreground block">Eventos</span>
                       <span className="font-bold text-red-600 text-base">{gapSummary.deadTimeCount}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-muted-foreground block">Suma total</span>
+                      <span className="text-[10px] text-muted-foreground block">Tiempo Muerto</span>
                       <span className="font-bold text-red-600 text-base">{gapSummary.totalDeadTimeFormatted}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-muted-foreground block">En minutos</span>
-                      <span className="font-bold text-red-700 text-base">{selectedOpStats.totalMin} min</span>
+                      <span className="text-[10px] text-muted-foreground block">Descanso</span>
+                      <span className="font-bold text-slate-500 text-base">-{selectedOpStats.descansoMin} min</span>
+                      <span className="text-[9px] text-muted-foreground ml-1">({selectedOpStats.diasTrabajados} dia{selectedOpStats.diasTrabajados !== 1 ? 's' : ''} x 60m)</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">Tiempo Neto</span>
+                      <span className="font-bold text-base">{selectedOpStats.totalNetoMin} min</span>
                     </div>
                     <div>
                       <span className="text-[10px] text-muted-foreground block">Mayor gap</span>
@@ -518,8 +551,9 @@ export default function DashboardPage() {
                           <TableHead className="text-xs w-12 text-center">#</TableHead>
                           <TableHead className="text-xs">Operador</TableHead>
                           <TableHead className="text-xs text-center">Turno</TableHead>
-                          <TableHead className="text-xs text-right">Tiempo Total</TableHead>
-                          <TableHead className="text-xs text-right">Minutos</TableHead>
+                          <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
+                          <TableHead className="text-xs text-right">Descanso</TableHead>
+                          <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
                           <TableHead className="text-xs text-right">Eventos</TableHead>
                           <TableHead className="text-xs text-right">Mayor Gap</TableHead>
                           <TableHead className="text-xs w-10"></TableHead>
@@ -545,11 +579,16 @@ export default function DashboardPage() {
                               <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
                               <TableCell className="text-xs text-right font-bold">
                                 <span className={isTop3 ? 'text-red-600' : op.totalMin > 100 ? 'text-orange-600' : ''}>
-                                  {fmtDur(Math.round(op.totalMin * 60))}
+                                  {op.totalMin} min
                                 </span>
                               </TableCell>
+                              <TableCell className="text-right">
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">-{op.descansoMin}m</span>
+                              </TableCell>
                               <TableCell className="text-xs text-right font-bold">
-                                <span className={isTop3 ? 'text-red-600' : ''}>{op.totalMin} min</span>
+                                <span className={op.totalNetoMin < 0 ? 'text-green-600' : 'text-foreground'}>
+                                  {op.totalNetoMin} min
+                                </span>
                               </TableCell>
                               <TableCell className="text-xs text-right">{op.events}</TableCell>
                               <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>

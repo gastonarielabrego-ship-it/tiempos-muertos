@@ -19,9 +19,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const operator = searchParams.get('operator');
     const turnoFilter = searchParams.get('turno');
+    const fechaFilter = searchParams.get('fecha');
 
     const where: Record<string, unknown> = {};
     if (operator) where.codUti = operator;
+    if (fechaFilter) where.fecha = fechaFilter;
 
     const scans = await db.scanRecord.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
@@ -57,7 +59,7 @@ export async function GET(request: NextRequest) {
 
     const opMap = new Map<string, {
       name: string; deadSec: number; events: number; maxSec: number;
-      turnos: Record<Turno, number>;
+      turnos: Record<Turno, number>; dias: Set<string>;
     }>();
 
     for (const [, dayScans] of grouped) {
@@ -84,10 +86,12 @@ export async function GET(request: NextRequest) {
             shiftData[turno].events++;
 
             if (!opMap.has(curr.codUti)) {
-              opMap.set(curr.codUti, { name: curr.nomUti, deadSec: 0, events: 0, maxSec: 0, turnos: { TM: 0, TT: 0, TN: 0 } });
+              opMap.set(curr.codUti, { name: curr.nomUti, deadSec: 0, events: 0, maxSec: 0, turnos: { TM: 0, TT: 0, TN: 0 }, dias: new Set() });
             }
             const entry = opMap.get(curr.codUti)!;
             entry.deadSec += gap;
+            const currFecha = curr.fecha instanceof Date ? curr.fecha.toISOString().split('T')[0] : String(curr.fecha).split('T')[0];
+            entry.dias.add(currFecha);
             entry.events++;
             entry.turnos[turno] += gap;
             if (gap > entry.maxSec) entry.maxSec = gap;
@@ -105,6 +109,9 @@ export async function GET(request: NextRequest) {
           codUti: cod,
           nomUti: d.name,
           totalMin: Math.round((d.deadSec / 60) * 10) / 10,
+          descansoMin: d.dias.size * 60,
+          totalNetoMin: Math.round(((d.deadSec / 60) - (d.dias.size * 60)) * 10) / 10,
+          diasTrabajados: d.dias.size,
           events: d.events,
           maxGap: d.maxSec,
           turno: predTurno,
