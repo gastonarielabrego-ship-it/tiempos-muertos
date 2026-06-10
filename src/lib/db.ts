@@ -29,9 +29,6 @@ async function getClient(): Promise<PrismaClient> {
     const isTurso = url.startsWith('libsql://');
 
     if (isTurso) {
-      // Prisma validates DATABASE_URL at construction, so swap to dummy for adapter mode
-      process.env.DATABASE_URL = 'file:./dummy.db';
-
       const { createClient } = await import('@libsql/client');
       const { PrismaLibSQL } = await import('@prisma/adapter-libsql');
 
@@ -41,7 +38,13 @@ async function getClient(): Promise<PrismaClient> {
       });
       const adapter = new PrismaLibSQL(libsql);
 
-      _client = new PrismaClient({ adapter, log: [] }) as unknown as PrismaClient;
+      // datasourceUrl bypasses env var (Vercel freezes process.env)
+      // and gives Prisma a valid SQLite URL for internal validation
+      _client = new PrismaClient({
+        adapter,
+        datasourceUrl: 'file:./dummy.db',
+        log: [],
+      }) as unknown as PrismaClient;
       console.log('[db] Connected to Turso');
     } else {
       // Local SQLite
