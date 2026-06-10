@@ -5,15 +5,15 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
- * Reads DATABASE_URL at RUNTIME (not build time).
- * Using a function prevents the bundler from inlining the value.
+ * Runtime-safe Turso URL check.
+ * Reads from TURSO_DATABASE_URL (real connection) or DATABASE_URL (fallback).
  */
-function runtimeDatabaseUrl(): string {
-  return process.env.DATABASE_URL || '';
+function getTursoUrl(): string {
+  return process.env.TURSO_DATABASE_URL || '';
 }
 
-function runtimeIsTurso(): boolean {
-  return runtimeDatabaseUrl().startsWith('libsql://');
+function isTurso(): boolean {
+  return getTursoUrl().startsWith('libsql://');
 }
 
 let _client: PrismaClient | null = null;
@@ -24,19 +24,29 @@ async function getClient(): Promise<PrismaClient> {
   if (_initPromise) return _initPromise;
 
   _initPromise = (async () => {
-    const url = runtimeDatabaseUrl();
-    const isTurso = url.startsWith('libsql://');
+    const tursoUrl = getTursoUrl();
+    const useTurso = tursoUrl.startsWith('libsql://');
 
-    if (isTurso) {
-      // With provider = "libsql" in schema, Prisma natively accepts libsql:// URLs.
-      // No adapter, no env var manipulation needed.
-      _client = new PrismaClient({
-        log: [],
-      }) as unknown as PrismaClient;
+    if (useTurso) {
+      const { createClient } = await import('@libsql/client');
+      const { PrismaLibSQL } = await import('@prisma/adapter-libsql');
+
+      const authToken = process.env.DATABASE_AUTH_TOKEN || process.env.TOKEN_AUTH_DE_BASE_DE_DATOS;
+
+      const libsql = createClient({
+        url: tursoUrl,
+        authToken,
+      });
+      const adapter = new PrismaLibSQL(libsql);
+
+      // Schema has hardcoded url="file:./dummy.db", adapter handles real connection
+      _client = new PrismaClient({ adapter, log: [] }) as unknown as PrismaClient;
       console.log('[db] Connected to Turso');
     } else {
-      // Local SQLite (file: URL)
+      // Local dev: override schema's dummy URL with real file: URL
+      const localUrl = process.env.DATABASE_URL || 'file:./db/custom.db';
       _client = new PrismaClient({
+        datasources: { db: { url: localUrl } },
         log: [],
       });
       console.log('[db] Connected to local SQLite');
@@ -44,7 +54,7 @@ async function getClient(): Promise<PrismaClient> {
 
     if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = _client;
 
-    // Auto-create tables on Turso / fresh deployments
+    // Auto-create tables
     try {
       await _client.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS "ScanRecord" (
@@ -77,14 +87,13 @@ async function getClient(): Promise<PrismaClient> {
   return _initPromise;
 }
 
-// Export a Proxy so existing code works with async init.
 export const db = new Proxy({} as PrismaClient, {
   get(_target, prop, receiver) {
     if (prop === 'then') return undefined;
     if (!_client) {
       throw new Error(
         `[db] Not initialized. Call getClient() first. ` +
-        `DATABASE_URL=${runtimeDatabaseUrl() ? runtimeDatabaseUrl().substring(0, 20) + '...' : 'UNDEFINED'}`
+        `TURSO_DATABASE_URL=${getTursoUrl() ? getTursoUrl().substring(0, 30) + '...' : 'UNDEFINED'}`
       );
     }
     const value = Reflect.get(_client, prop, receiver);
@@ -93,4 +102,4 @@ export const db = new Proxy({} as PrismaClient, {
   },
 });
 
-export { getClient, runtimeDatabaseUrl, runtimeIsTurso };
+export { getClient, getTursoUrl, isTurso };
