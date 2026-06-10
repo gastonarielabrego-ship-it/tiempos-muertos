@@ -4,15 +4,23 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 };
 
-const dbUrl = process.env.DATABASE_URL || 'file:./db/custom.db';
+// For adapter mode, Prisma needs a valid SQLite URL for validation
+// but the actual connection goes through the libsql adapter
+const TURSO_URL = process.env.DATABASE_URL || '';
+const isTurso = TURSO_URL.startsWith('libsql://');
+
+// Prisma validates DATABASE_URL at construction time.
+// When using adapter, we provide a dummy file: URL to pass validation.
+if (isTurso) {
+  process.env.DATABASE_URL = 'file:./dummy.db';
+}
 
 function createPrismaClient() {
-  // Turso / libsql URL detected
-  if (dbUrl.startsWith('libsql://')) {
+  if (isTurso) {
     const { createClient } = require('@libsql/client');
     const { PrismaLibSQL } = require('@prisma/adapter-libsql');
 
-    const libsql = createClient({ url: dbUrl, authToken: process.env.DATABASE_AUTH_TOKEN });
+    const libsql = createClient({ url: TURSO_URL, authToken: process.env.DATABASE_AUTH_TOKEN });
     const adapter = new PrismaLibSQL(libsql);
 
     return new PrismaClient({
@@ -21,7 +29,10 @@ function createPrismaClient() {
     }) as PrismaClient;
   }
 
-  // Local SQLite
+  // Local SQLite - restore original URL
+  if (!isTurso) {
+    process.env.DATABASE_URL = TURSO_URL || 'file:./db/custom.db';
+  }
   return new PrismaClient({
     log: [],
   });
@@ -30,7 +41,7 @@ function createPrismaClient() {
 export const db = globalForPrisma.prisma ?? createPrismaClient();
 
 // Auto-create tables on Turso / fresh deployments
-if (dbUrl.startsWith('libsql://')) {
+if (isTurso) {
   (async () => {
     try {
       await db.$executeRawUnsafe(`
