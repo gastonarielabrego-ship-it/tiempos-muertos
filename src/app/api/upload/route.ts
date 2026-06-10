@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getClient } from '@/lib/db';
 import * as XLSX from 'xlsx';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
 export async function POST(request: NextRequest) {
   try {
+    const db = await getClient();
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 

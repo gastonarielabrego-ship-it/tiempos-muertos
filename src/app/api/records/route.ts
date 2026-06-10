@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getClient } from '@/lib/db';
 
 export async function GET() {
   try {
+    const db = await getClient();
     // Get all distinct dates
     const dates = await db.scanRecord.findMany({
       distinct: ['fecha'],

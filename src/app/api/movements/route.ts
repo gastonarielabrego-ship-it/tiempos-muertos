@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getClient } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 
 const DEAD_TIME_THRESHOLD = 300;
@@ -17,6 +17,7 @@ function getTurno(hora: string): Turno {
 
 export async function GET(request: NextRequest) {
   try {
+    const db = await getClient();
     const { searchParams } = new URL(request.url);
     const operator = searchParams.get('operator') || 'all';
     const turnoFilter = searchParams.get('turno');

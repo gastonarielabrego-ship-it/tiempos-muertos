@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getClient } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 
 type Turno = 'TM' | 'TT' | 'TN';
@@ -38,6 +38,7 @@ interface PickRow {
 
 export async function GET(request: NextRequest) {
   try {
+    const db = await getClient();
     const { searchParams } = new URL(request.url);
     const operator = searchParams.get('operator') || 'all';
     const turnoFilter = searchParams.get('turno');
