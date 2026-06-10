@@ -61,11 +61,6 @@ export async function GET(request: NextRequest) {
     }>();
 
     for (const [, dayScans] of grouped) {
-      const firstScan = dayScans[0];
-      const turno: Turno = getTurno(firstScan.hora);
-
-      if (turnoFilter && turno !== turnoFilter) continue;
-
       for (let i = 1; i < dayScans.length; i++) {
         const prev = dayScans[i - 1];
         const curr = dayScans[i];
@@ -77,6 +72,11 @@ export async function GET(request: NextRequest) {
           if (gap > maxGap) maxGap = gap;
 
           if (gap > DEAD_TIME_THRESHOLD) {
+            // Determine turno based on the CURRENT scan's time (when the gap ended)
+            const turno: Turno = getTurno(curr.hora);
+
+            if (turnoFilter && turno !== turnoFilter) continue;
+
             totalDeadTime += gap;
             deadTimeEvents++;
             deadTimeGapSum += gap;
