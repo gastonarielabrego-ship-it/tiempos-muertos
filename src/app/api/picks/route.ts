@@ -8,8 +8,8 @@ function getTurno(hora: string): Turno {
   const parts = hora.split(':').map(Number);
   const totalMin = parts[0] * 60 + parts[1];
   if (totalMin < 6 * 60) return 'TN';
-  if (totalMin < 10 * 60) return 'TM';
-  if (totalMin < 18 * 60) return 'TT';
+  if (totalMin < 14 * 60) return 'TM';
+  if (totalMin < 22 * 60) return 'TT';
   return 'TN';
 }
 

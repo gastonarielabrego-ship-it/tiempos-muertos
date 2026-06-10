@@ -410,7 +410,7 @@ export default function DashboardPage() {
                   <CardContent className="p-4 sm:p-5">
                     <h3 className="text-sm font-semibold mb-3">Por Turno</h3>
                     <p className="text-[10px] text-muted-foreground mb-3">
-                      TM (6-10hs) · TT (10-18hs) · TN (resto)
+                      TM (6-14hs) · TT (14-22hs) · TN (resto)
                     </p>
                     <div className="grid grid-cols-3 gap-3">
                       {(['TM', 'TT', 'TN'] as const).map(t => (
@@ -775,7 +775,7 @@ export default function DashboardPage() {
       <footer className="mt-auto border-t bg-white/60">
         <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6">
           <p className="text-center text-[10px] text-muted-foreground">
-            Umbral: &gt;5 min = tiempo muerto — TM (6-10hs) TT (10-18hs) TN (resto)
+            Umbral: &gt;5 min = tiempo muerto — TM (6-14hs) TT (14-22hs) TN (resto)
           </p>
         </div>
       </footer>
