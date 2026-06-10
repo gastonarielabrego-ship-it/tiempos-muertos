@@ -4,41 +4,44 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 };
 
-// For adapter mode, Prisma needs a valid SQLite URL for validation
-// but the actual connection goes through the libsql adapter
 const TURSO_URL = process.env.DATABASE_URL || '';
 const isTurso = TURSO_URL.startsWith('libsql://');
 
 // Prisma validates DATABASE_URL at construction time.
-// When using adapter, we provide a dummy file: URL to pass validation.
+// When using adapter, provide a dummy file: URL to pass validation.
 if (isTurso) {
   process.env.DATABASE_URL = 'file:./dummy.db';
 }
 
-function createPrismaClient() {
-  if (isTurso) {
-    const { createClient } = require('@libsql/client');
-    const { PrismaLibSQL } = require('@prisma/adapter-libsql');
+let db: PrismaClient;
 
-    const libsql = createClient({ url: TURSO_URL, authToken: process.env.DATABASE_AUTH_TOKEN });
-    const adapter = new PrismaLibSQL(libsql);
+if (isTurso) {
+  // Dynamic import for Turso adapter (avoids bundling issues on Vercel)
+  const { createClient } = await import('@libsql/client');
+  const { PrismaLibSQL } = await import('@prisma/adapter-libsql');
 
-    return new PrismaClient({
-      adapter,
-      log: [],
-    }) as PrismaClient;
-  }
+  const libsql = createClient({
+    url: TURSO_URL,
+    authToken: process.env.DATABASE_AUTH_TOKEN,
+  });
+  const adapter = new PrismaLibSQL(libsql);
 
-  // Local SQLite - restore original URL
-  if (!isTurso) {
-    process.env.DATABASE_URL = TURSO_URL || 'file:./db/custom.db';
-  }
-  return new PrismaClient({
+  db = new PrismaClient({
+    adapter,
+    log: [],
+  }) as unknown as PrismaClient;
+} else {
+  // Local SQLite
+  process.env.DATABASE_URL = TURSO_URL || 'file:./db/custom.db';
+  db = new PrismaClient({
     log: [],
   });
 }
 
-export const db = globalForPrisma.prisma ?? createPrismaClient();
+// Singleton in development to survive HMR
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db;
+
+export { db };
 
 // Auto-create tables on Turso / fresh deployments
 if (isTurso) {
@@ -64,8 +67,9 @@ if (isTurso) {
       `);
       await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ScanRecord_codUti_fecha_idx" ON "ScanRecord"("codUti", "fecha")`);
       await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ScanRecord_fecha_idx" ON "ScanRecord"("fecha")`);
-    } catch {}
+      console.log('✅ Turso tables ready');
+    } catch (e) {
+      console.error('Auto-create table error:', e);
+    }
   })();
 }
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db;
