@@ -543,7 +543,7 @@ export default function DashboardPage() {
                               <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
                               <TableCell className="text-xs text-right font-bold">
                                 <span className={isTop3 ? 'text-red-600' : op.totalMin > 100 ? 'text-orange-600' : ''}>
-                                  {fmtDur(op.totalMin * 60)}
+                                  {fmtDur(Math.round(op.totalMin * 60))}
                                 </span>
                               </TableCell>
                               <TableCell className="text-xs text-right font-bold">
