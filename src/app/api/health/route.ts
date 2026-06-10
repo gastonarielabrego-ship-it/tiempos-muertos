@@ -4,7 +4,7 @@ import { runtimeDatabaseUrl, runtimeIsTurso, getClient } from '@/lib/db';
 export async function GET() {
   const url = runtimeDatabaseUrl();
   const isTurso = runtimeIsTurso();
-  const hasAuthToken = !!process.env.DATABASE_AUTH_TOKEN;
+  const hasAuthToken = !!(process.env.DATABASE_AUTH_TOKEN || process.env.TOKEN_AUTH_DE_BASE_DE_DATOS);
 
   const info = {
     databaseUrl: url ? `${url.substring(0, 25)}...` : 'UNDEFINED',
