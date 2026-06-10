@@ -30,6 +30,8 @@ interface PickRow {
   ultimoZona: string | null;
   ultimoProducto: string;
   jornadaSec: number;
+  descansoSec: number;
+  jornadaEfectivaSec: number;
 }
 
 export async function GET(request: NextRequest) {
@@ -78,6 +80,8 @@ export async function GET(request: NextRequest) {
         ultimoZona: last.zonSts,
         ultimoProducto: last.codPro,
         jornadaSec: horaToSec(last.hora) - horaToSec(first.hora),
+        descansoSec: 3600,
+        jornadaEfectivaSec: Math.max(0, horaToSec(last.hora) - horaToSec(first.hora) - 3600),
       });
     }
 

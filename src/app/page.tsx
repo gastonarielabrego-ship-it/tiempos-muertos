@@ -73,6 +73,8 @@ interface PickRow {
   ultimoZona: string | null;
   ultimoProducto: string;
   jornadaSec: number;
+  descansoSec: number;
+  jornadaEfectivaSec: number;
 }
 
 interface Filters {
@@ -697,6 +699,8 @@ export default function DashboardPage() {
                                 <span className="flex items-center justify-center gap-1"><PlayCircle className="h-3 w-3 text-blue-500" /> Primer Pikeo</span>
                               </TableHead>
                               <TableHead className="text-xs text-center">Jornada</TableHead>
+                              <TableHead className="text-xs text-center">Descanso</TableHead>
+                              <TableHead className="text-xs text-center">Efectiva</TableHead>
                               <TableHead className="text-xs text-center bg-green-50" colSpan={3}>
                                 <span className="flex items-center justify-center gap-1"><StopCircle className="h-3 w-3 text-green-500" /> Último Pikeo</span>
                               </TableHead>
@@ -709,7 +713,9 @@ export default function DashboardPage() {
                               <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
-                              <TableHead className="text-[10px] text-muted-foreground">Duración</TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">Bruta</TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">60m</TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">Neta</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
@@ -734,14 +740,22 @@ export default function DashboardPage() {
                                   <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.primerZona || '—'}</span>
                                 </TableCell>
                                 <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.primerProducto}</TableCell>
-                                {/* Jornada */}
+                                {/* Jornada Bruta */}
+                                <TableCell className="text-center">
+                                  <span className="text-xs text-muted-foreground">{fmtDur(row.jornadaSec)}</span>
+                                </TableCell>
+                                {/* Descanso */}
+                                <TableCell className="text-center">
+                                  <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">-60m</span>
+                                </TableCell>
+                                {/* Jornada Efectiva */}
                                 <TableCell className="text-center">
                                   <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
-                                    row.jornadaSec < 3600 ? 'bg-green-100 text-green-700'
-                                    : row.jornadaSec < 21600 ? 'bg-amber-100 text-amber-700'
+                                    row.jornadaEfectivaSec < 3600 ? 'bg-green-100 text-green-700'
+                                    : row.jornadaEfectivaSec < 21600 ? 'bg-amber-100 text-amber-700'
                                     : 'bg-red-100 text-red-700'
                                   }`}>
-                                    {fmtDur(row.jornadaSec)}
+                                    {fmtDur(row.jornadaEfectivaSec)}
                                   </span>
                                 </TableCell>
                                 {/* Último pikeo */}
