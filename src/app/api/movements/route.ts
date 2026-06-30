@@ -19,11 +19,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const operator = searchParams.get('operator') || 'all';
     const turnoFilter = searchParams.get('turno');
+    const fechaFilter = searchParams.get('fecha');
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '100');
 
     const where: Record<string, unknown> = {};
     if (operator !== 'all') where.codUti = operator;
+    if (fechaFilter) where.fecha = fechaFilter;
 
     const allScans = await db.scanRecord.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
@@ -61,9 +63,6 @@ export async function GET(request: NextRequest) {
     let totalDeadTimeSec = 0;
 
     for (const [, dayScans] of grouped) {
-      const turno: Turno = getTurno(dayScans[0].hora);
-      if (turnoFilter && turno !== turnoFilter) continue;
-
       for (let i = 1; i < dayScans.length; i++) {
         const prev = dayScans[i - 1];
         const curr = dayScans[i];
@@ -72,6 +71,9 @@ export async function GET(request: NextRequest) {
         const gap = (c[0] * 3600 + c[1] * 60 + c[2]) - (p[0] * 3600 + p[1] * 60 + p[2]);
 
         if (gap > DEAD_TIME_THRESHOLD) {
+          const turno: Turno = getTurno(curr.hora);
+          if (turnoFilter && turno !== turnoFilter) continue;
+
           totalDeadTimeSec += gap;
           gaps.push({
             rank: 0,

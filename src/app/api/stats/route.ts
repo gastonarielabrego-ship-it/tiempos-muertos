@@ -19,9 +19,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const operator = searchParams.get('operator');
     const turnoFilter = searchParams.get('turno');
+    const fechaFilter = searchParams.get('fecha');
 
     const where: Record<string, unknown> = {};
     if (operator) where.codUti = operator;
+    if (fechaFilter) where.fecha = fechaFilter;
 
     const scans = await db.scanRecord.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
@@ -57,15 +59,10 @@ export async function GET(request: NextRequest) {
 
     const opMap = new Map<string, {
       name: string; deadSec: number; events: number; maxSec: number;
-      turnos: Record<Turno, number>;
+      turnos: Record<Turno, number>; dias: Set<string>;
     }>();
 
     for (const [, dayScans] of grouped) {
-      const firstScan = dayScans[0];
-      const turno: Turno = getTurno(firstScan.hora);
-
-      if (turnoFilter && turno !== turnoFilter) continue;
-
       for (let i = 1; i < dayScans.length; i++) {
         const prev = dayScans[i - 1];
         const curr = dayScans[i];
@@ -77,6 +74,11 @@ export async function GET(request: NextRequest) {
           if (gap > maxGap) maxGap = gap;
 
           if (gap > DEAD_TIME_THRESHOLD) {
+            // Determine turno based on the CURRENT scan's time (when the gap ended)
+            const turno: Turno = getTurno(curr.hora);
+
+            if (turnoFilter && turno !== turnoFilter) continue;
+
             totalDeadTime += gap;
             deadTimeEvents++;
             deadTimeGapSum += gap;
@@ -84,10 +86,12 @@ export async function GET(request: NextRequest) {
             shiftData[turno].events++;
 
             if (!opMap.has(curr.codUti)) {
-              opMap.set(curr.codUti, { name: curr.nomUti, deadSec: 0, events: 0, maxSec: 0, turnos: { TM: 0, TT: 0, TN: 0 } });
+              opMap.set(curr.codUti, { name: curr.nomUti, deadSec: 0, events: 0, maxSec: 0, turnos: { TM: 0, TT: 0, TN: 0 }, dias: new Set() });
             }
             const entry = opMap.get(curr.codUti)!;
             entry.deadSec += gap;
+            const currFecha = curr.fecha instanceof Date ? curr.fecha.toISOString().split('T')[0] : String(curr.fecha).split('T')[0];
+            entry.dias.add(currFecha);
             entry.events++;
             entry.turnos[turno] += gap;
             if (gap > entry.maxSec) entry.maxSec = gap;
@@ -101,10 +105,20 @@ export async function GET(request: NextRequest) {
         const predTurno: Turno = (['TM', 'TT', 'TN'] as Turno[]).sort(
           (a, b) => d.turnos[b] - d.turnos[a]
         )[0];
+        const brutoMin = Math.round((d.deadSec / 60) * 10) / 10;
+        const descansoBruto = d.dias.size * 60;
+        const descansoReal = Math.min(descansoBruto, brutoMin);
+        const netoMin = Math.round((brutoMin - descansoReal) * 10) / 10;
         return {
           codUti: cod,
           nomUti: d.name,
-          totalMin: Math.round((d.deadSec / 60) * 10) / 10,
+          totalMin: brutoMin,
+          totalMinSec: Math.round(brutoMin * 60),
+          descansoMin: descansoReal,
+          descansoMinSec: descansoReal * 60,
+          totalNetoMin: netoMin,
+          totalNetoMinSec: Math.round(netoMin * 60),
+          diasTrabajados: d.dias.size,
           events: d.events,
           maxGap: d.maxSec,
           turno: predTurno,

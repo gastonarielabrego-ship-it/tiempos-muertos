@@ -112,10 +112,18 @@ export const db = {
 
         let sql = 'SELECT * FROM "ScanRecord"';
         const params: (string | number | null)[] = [];
+        const conditions: string[] = [];
 
         if (args?.where?.codUti && args.where.codUti !== 'all') {
-          sql += ' WHERE "codUti" = ?';
+          conditions.push('"codUti" = ?');
           params.push(String(args.where.codUti));
+        }
+        if (args?.where?.fecha) {
+          conditions.push('date("fecha") = ?');
+          params.push(String(args.where.fecha));
+        }
+        if (conditions.length > 0) {
+          sql += ' WHERE ' + conditions.join(' AND ');
         }
 
         sql += ` ORDER BY ${orderCol} ${orderDir}`;

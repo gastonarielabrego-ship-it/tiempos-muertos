@@ -13,7 +13,7 @@ import {
   Upload, RefreshCw, Clock, BarChart3, AlertTriangle,
   Loader2, Database, Timer, ChevronLeft, ChevronRight,
   X, ArrowDown, Trophy, ArrowRight, User, Sun, Sunset, Moon,
-  PlayCircle, StopCircle,
+  PlayCircle, StopCircle, Download,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -36,6 +36,12 @@ interface OpStat {
   codUti: string;
   nomUti: string;
   totalMin: number;
+  totalMinSec: number;
+  descansoMin: number;
+  descansoMinSec: number;
+  totalNetoMin: number;
+  totalNetoMinSec: number;
+  diasTrabajados: number;
   events: number;
   maxGap: number;
   turno: string;
@@ -73,10 +79,13 @@ interface PickRow {
   ultimoZona: string | null;
   ultimoProducto: string;
   jornadaSec: number;
+  descansoSec: number;
+  jornadaEfectivaSec: number;
 }
 
 interface Filters {
   operators: { codUti: string; nomUti: string }[];
+  dates: string[];
   totalRecords: number;
 }
 
@@ -127,6 +136,7 @@ export default function DashboardPage() {
   const [uploading, setUploading] = useState(false);
   const [selectedOp, setSelectedOp] = useState<string>('all');
   const [selectedTurno, setSelectedTurno] = useState<string>('all');
+  const [selectedDate, setSelectedDate] = useState<string>('all');
   const [hasData, setHasData] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('ranking');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -142,12 +152,17 @@ export default function DashboardPage() {
     } catch { /* silent */ }
   }, []);
 
+  const addCommonParams = (params: URLSearchParams) => {
+    if (selectedOp !== 'all') params.set('operator', selectedOp);
+    if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+    if (selectedDate !== 'all') params.set('fecha', selectedDate);
+  };
+
   const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (selectedOp !== 'all') params.set('operator', selectedOp);
-      if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+      addCommonParams(params);
       const res = await fetch(`/api/stats?${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -157,7 +172,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedOp, selectedTurno, toast]);
+  }, [selectedOp, selectedTurno, selectedDate, toast]);
 
   const fetchGaps = useCallback(async (page: number) => {
     setGapLoading(true);
@@ -165,8 +180,7 @@ export default function DashboardPage() {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('pageSize', '50');
-      if (selectedOp !== 'all') params.set('operator', selectedOp);
-      if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+      addCommonParams(params);
       const res = await fetch(`/api/movements?${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -180,7 +194,7 @@ export default function DashboardPage() {
     } finally {
       setGapLoading(false);
     }
-  }, [selectedOp, selectedTurno, toast]);
+  }, [selectedOp, selectedTurno, selectedDate, toast]);
 
   const fetchPicks = useCallback(async (page: number) => {
     setPicksLoading(true);
@@ -188,8 +202,7 @@ export default function DashboardPage() {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('pageSize', '100');
-      if (selectedOp !== 'all') params.set('operator', selectedOp);
-      if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+      addCommonParams(params);
       const res = await fetch(`/api/picks?${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -202,7 +215,7 @@ export default function DashboardPage() {
     } finally {
       setPicksLoading(false);
     }
-  }, [selectedOp, selectedTurno, toast]);
+  }, [selectedOp, selectedTurno, selectedDate, toast]);
 
   useEffect(() => { fetchFilters(); }, [fetchFilters]);
 
@@ -216,7 +229,7 @@ export default function DashboardPage() {
     fetchStats();
     if (activeTab === 'operador' && selectedOp !== 'all') fetchGaps(1);
     if (activeTab === 'picks') fetchPicks(1);
-  }, [selectedOp, selectedTurno, activeTab, hasData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedOp, selectedTurno, selectedDate, activeTab, hasData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpChange = (val: string) => {
     setSelectedOp(val);
@@ -227,6 +240,12 @@ export default function DashboardPage() {
 
   const handleTurnoChange = (val: string) => {
     setSelectedTurno(val);
+    setGapPage(1);
+    setPicksPage(1);
+  };
+
+  const handleDateChange = (val: string) => {
+    setSelectedDate(val);
     setGapPage(1);
     setPicksPage(1);
   };
@@ -251,6 +270,7 @@ export default function DashboardPage() {
       setHasData(true);
       setSelectedOp('all');
       setSelectedTurno('all');
+      setSelectedDate('all');
       setActiveTab('ranking');
       await fetchFilters();
     } catch (err) {
@@ -334,8 +354,21 @@ export default function DashboardPage() {
                 </SelectContent>
               </Select>
 
-              {(selectedOp !== 'all' || selectedTurno !== 'all') && (
-                <Button variant="ghost" size="sm" onClick={() => { setSelectedOp('all'); setSelectedTurno('all'); setActiveTab('ranking'); }} className="h-8 text-xs">
+              <span className="text-xs font-medium text-muted-foreground ml-2">Fecha:</span>
+              <Select value={selectedDate} onValueChange={handleDateChange}>
+                <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las fechas</SelectItem>
+                  {filters?.dates.map(d => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {(selectedOp !== 'all' || selectedTurno !== 'all' || selectedDate !== 'all') && (
+                <Button variant="ghost" size="sm" onClick={() => { setSelectedOp('all'); setSelectedTurno('all'); setSelectedDate('all'); setActiveTab('ranking'); }} className="h-8 text-xs">
                   <X className="h-3 w-3 mr-1" />Limpiar
                 </Button>
               )}
@@ -436,27 +469,31 @@ export default function DashboardPage() {
             {selectedOp !== 'all' && selectedOpStats && gapSummary && (
               <Card className="border-red-200 bg-red-50/50">
                 <CardContent className="p-4 sm:p-5">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-3">
                     <User className="h-4 w-4 text-red-500" />
                     <h3 className="text-sm font-semibold text-red-700">{selectedOpName}</h3>
                     <TurnoBadge turno={selectedOpStats.turno} />
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">Eventos</span>
-                      <span className="font-bold text-red-600 text-base">{gapSummary.deadTimeCount}</span>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-red-100">
+                      <span className="text-[10px] text-muted-foreground">Tiempo Muerto</span>
+                      <span className="text-xs text-right font-bold text-red-600">{fmtDur(selectedOpStats.totalMinSec)}</span>
+                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.totalMin} min</span>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">Suma total</span>
-                      <span className="font-bold text-red-600 text-base">{gapSummary.totalDeadTimeFormatted}</span>
+                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-slate-200">
+                      <span className="text-[10px] text-muted-foreground">Descanso</span>
+                      <span className="text-xs text-right font-medium text-slate-500">{selectedOpStats.descansoMin > 0 ? `-${fmtDur(selectedOpStats.descansoMinSec)}` : '—'}</span>
+                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.descansoMin > 0 ? `-${selectedOpStats.descansoMin} min (${selectedOpStats.diasTrabajados}d x 60m)` : '—'}</span>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">En minutos</span>
-                      <span className="font-bold text-red-700 text-base">{selectedOpStats.totalMin} min</span>
+                    <div className="grid grid-cols-3 gap-2 items-center py-1.5 bg-green-50/60 rounded px-1">
+                      <span className="text-[10px] font-semibold text-green-700">Tiempo Neto</span>
+                      <span className="text-xs text-right font-bold text-green-700">{fmtDur(selectedOpStats.totalNetoMinSec)}</span>
+                      <span className="text-[10px] text-right text-green-600">{selectedOpStats.totalNetoMin} min</span>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block">Mayor gap</span>
-                      <span className="font-bold text-red-700 text-base">{fmtDur(selectedOpStats.maxGap)}</span>
+                    <div className="grid grid-cols-3 gap-2 items-center pt-1 border-t border-slate-200">
+                      <span className="text-[10px] text-muted-foreground">Eventos / Mayor gap</span>
+                      <span className="text-xs text-right font-bold">{gapSummary.deadTimeCount} eventos</span>
+                      <span className="text-xs text-right font-mono text-red-700">{fmtDur(selectedOpStats.maxGap)}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -516,8 +553,9 @@ export default function DashboardPage() {
                           <TableHead className="text-xs w-12 text-center">#</TableHead>
                           <TableHead className="text-xs">Operador</TableHead>
                           <TableHead className="text-xs text-center">Turno</TableHead>
-                          <TableHead className="text-xs text-right">Tiempo Total</TableHead>
-                          <TableHead className="text-xs text-right">Minutos</TableHead>
+                          <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
+                          <TableHead className="text-xs text-right">Descanso</TableHead>
+                          <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
                           <TableHead className="text-xs text-right">Eventos</TableHead>
                           <TableHead className="text-xs text-right">Mayor Gap</TableHead>
                           <TableHead className="text-xs w-10"></TableHead>
@@ -543,11 +581,16 @@ export default function DashboardPage() {
                               <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
                               <TableCell className="text-xs text-right font-bold">
                                 <span className={isTop3 ? 'text-red-600' : op.totalMin > 100 ? 'text-orange-600' : ''}>
-                                  {fmtDur(op.totalMin * 60)}
+                                  {fmtDur(op.totalMinSec)}
                                 </span>
                               </TableCell>
+                              <TableCell className="text-right">
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{op.descansoMin > 0 ? `-${fmtDur(op.descansoMinSec)}` : '—'}</span>
+                              </TableCell>
                               <TableCell className="text-xs text-right font-bold">
-                                <span className={isTop3 ? 'text-red-600' : ''}>{op.totalMin} min</span>
+                                <span className="text-green-700">
+                                  {fmtDur(op.totalNetoMinSec)}
+                                </span>
                               </TableCell>
                               <TableCell className="text-xs text-right">{op.events}</TableCell>
                               <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
@@ -576,7 +619,24 @@ export default function DashboardPage() {
                   <CardContent className="p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                       <h3 className="text-sm font-semibold">Eventos de {selectedOpName}</h3>
-                      <span className="text-xs text-muted-foreground">{gapTotal} gaps &gt;5 min</span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => {
+                            const params = new URLSearchParams();
+                            params.set('operator', selectedOp);
+                            if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+                            if (selectedDate !== 'all') params.set('fecha', selectedDate);
+                            window.open(`/api/export-operator?${params}`, '_blank');
+                          }}
+                        >
+                          <Download className="h-3 w-3" />
+                          <span className="hidden sm:inline">Descargar Excel</span>
+                        </Button>
+                        <span className="text-xs text-muted-foreground">{gapTotal} gaps &gt;5 min</span>
+                      </div>
                     </div>
                     {gapLoading ? (
                       <div className="flex items-center justify-center py-12">
@@ -697,6 +757,8 @@ export default function DashboardPage() {
                                 <span className="flex items-center justify-center gap-1"><PlayCircle className="h-3 w-3 text-blue-500" /> Primer Pikeo</span>
                               </TableHead>
                               <TableHead className="text-xs text-center">Jornada</TableHead>
+                              <TableHead className="text-xs text-center">Descanso</TableHead>
+                              <TableHead className="text-xs text-center">Efectiva</TableHead>
                               <TableHead className="text-xs text-center bg-green-50" colSpan={3}>
                                 <span className="flex items-center justify-center gap-1"><StopCircle className="h-3 w-3 text-green-500" /> Último Pikeo</span>
                               </TableHead>
@@ -709,7 +771,9 @@ export default function DashboardPage() {
                               <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
-                              <TableHead className="text-[10px] text-muted-foreground">Duración</TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">Bruta</TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">60m</TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">Neta</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
@@ -734,14 +798,22 @@ export default function DashboardPage() {
                                   <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.primerZona || '—'}</span>
                                 </TableCell>
                                 <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.primerProducto}</TableCell>
-                                {/* Jornada */}
+                                {/* Jornada Bruta */}
+                                <TableCell className="text-center">
+                                  <span className="text-xs text-muted-foreground">{fmtDur(row.jornadaSec)}</span>
+                                </TableCell>
+                                {/* Descanso */}
+                                <TableCell className="text-center">
+                                  <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">-60m</span>
+                                </TableCell>
+                                {/* Jornada Efectiva */}
                                 <TableCell className="text-center">
                                   <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
-                                    row.jornadaSec < 3600 ? 'bg-green-100 text-green-700'
-                                    : row.jornadaSec < 21600 ? 'bg-amber-100 text-amber-700'
+                                    row.jornadaEfectivaSec < 3600 ? 'bg-green-100 text-green-700'
+                                    : row.jornadaEfectivaSec < 21600 ? 'bg-amber-100 text-amber-700'
                                     : 'bg-red-100 text-red-700'
                                   }`}>
-                                    {fmtDur(row.jornadaSec)}
+                                    {fmtDur(row.jornadaEfectivaSec)}
                                   </span>
                                 </TableCell>
                                 {/* Último pikeo */}

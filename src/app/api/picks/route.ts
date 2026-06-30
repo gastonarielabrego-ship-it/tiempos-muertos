@@ -30,6 +30,8 @@ interface PickRow {
   ultimoZona: string | null;
   ultimoProducto: string;
   jornadaSec: number;
+  descansoSec: number;
+  jornadaEfectivaSec: number;
 }
 
 export async function GET(request: NextRequest) {
@@ -37,11 +39,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const operator = searchParams.get('operator') || 'all';
     const turnoFilter = searchParams.get('turno');
+    const fechaFilter = searchParams.get('fecha');
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '100');
 
     const where: Record<string, unknown> = {};
     if (operator !== 'all') where.codUti = operator;
+    if (fechaFilter) where.fecha = fechaFilter;
 
     const allScans = await db.scanRecord.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
@@ -78,6 +82,8 @@ export async function GET(request: NextRequest) {
         ultimoZona: last.zonSts,
         ultimoProducto: last.codPro,
         jornadaSec: horaToSec(last.hora) - horaToSec(first.hora),
+        descansoSec: 3600,
+        jornadaEfectivaSec: Math.max(0, horaToSec(last.hora) - horaToSec(first.hora) - 3600),
       });
     }
 
