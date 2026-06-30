@@ -57,6 +57,12 @@ export async function GET(request: NextRequest) {
       TN: { sec: 0, events: 0 },
     };
 
+    // Sum total bultos per operator from ALL scans
+    const bultosMap = new Map<string, number>();
+    for (const s of scans) {
+      bultosMap.set(s.codUti, (bultosMap.get(s.codUti) || 0) + s.bultos);
+    }
+
     const opMap = new Map<string, {
       name: string; deadSec: number; events: number; maxSec: number;
       turnos: Record<Turno, number>; dias: Set<string>;
@@ -122,6 +128,7 @@ export async function GET(request: NextRequest) {
           events: d.events,
           maxGap: d.maxSec,
           turno: predTurno,
+          totalBultos: bultosMap.get(cod) || 0,
         };
       })
       .sort((a, b) => b.totalMin - a.totalMin);

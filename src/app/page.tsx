@@ -41,6 +41,7 @@ interface OpStat {
   descansoMinSec: number;
   totalNetoMin: number;
   totalNetoMinSec: number;
+  totalBultos: number;
   diasTrabajados: number;
   events: number;
   maxGap: number;
@@ -556,6 +557,7 @@ export default function DashboardPage() {
                           <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
                           <TableHead className="text-xs text-right">Descanso</TableHead>
                           <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
+                          <TableHead className="text-xs text-right">Bultos</TableHead>
                           <TableHead className="text-xs text-right">Eventos</TableHead>
                           <TableHead className="text-xs text-right">Mayor Gap</TableHead>
                           <TableHead className="text-xs w-10"></TableHead>
@@ -592,6 +594,7 @@ export default function DashboardPage() {
                                   {fmtDur(op.totalNetoMinSec)}
                                 </span>
                               </TableCell>
+                              <TableCell className="text-xs text-right font-medium">{op.totalBultos.toLocaleString('es-AR')}</TableCell>
                               <TableCell className="text-xs text-right">{op.events}</TableCell>
                               <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
                               <TableCell className="text-center"><span className="text-[10px] text-muted-foreground">ver</span></TableCell>
@@ -654,10 +657,10 @@ export default function DashboardPage() {
                                 <TableHead className="text-xs w-10 text-center">#</TableHead>
                                 <TableHead className="text-xs">Fecha</TableHead>
                                 <TableHead className="text-xs text-center w-14">Turno</TableHead>
-                                <TableHead className="text-xs text-center bg-blue-50" colSpan={3}>Pickeo Previo</TableHead>
+                                <TableHead className="text-xs text-center bg-blue-50" colSpan={4}>Pickeo Previo</TableHead>
                                 <TableHead className="text-xs text-center">Trayecto</TableHead>
                                 <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
-                                <TableHead className="text-xs text-center bg-green-50" colSpan={3}>Pickeo Posterior</TableHead>
+                                <TableHead className="text-xs text-center bg-green-50" colSpan={4}>Pickeo Posterior</TableHead>
                               </TableRow>
                               <TableRow>
                                 <TableHead className="text-[10px]"></TableHead>
@@ -665,11 +668,13 @@ export default function DashboardPage() {
                                 <TableHead className="text-[10px]"></TableHead>
                                 <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
                                 <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Bultos</TableHead>
                                 <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
                                 <TableHead className="text-[10px] text-muted-foreground">Zona → Zona</TableHead>
                                 <TableHead className="text-[10px]"></TableHead>
                                 <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
                                 <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Bultos</TableHead>
                                 <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -691,6 +696,7 @@ export default function DashboardPage() {
                                     <TableCell className="text-xs bg-blue-50/50">
                                       <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.prevZonSts || '—'}</span>
                                     </TableCell>
+                                    <TableCell className="text-xs text-center font-semibold bg-blue-50/50 text-blue-700">{row.prevBultos}</TableCell>
                                     <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.prevCodPro}</TableCell>
                                     <TableCell className="text-center px-1">
                                       <div className="flex items-center justify-center gap-0.5">
@@ -706,6 +712,7 @@ export default function DashboardPage() {
                                     <TableCell className="text-xs bg-green-50/50">
                                       <span className="inline-block px-1.5 py-0.5 rounded bg-green-200 text-green-800 text-[10px] font-semibold">{row.currZonSts || '—'}</span>
                                     </TableCell>
+                                    <TableCell className="text-xs text-center font-semibold bg-green-50/50 text-green-700">{row.currBultos}</TableCell>
                                     <TableCell className="text-[10px] font-mono text-muted-foreground bg-green-50/50 max-w-[110px] truncate">{row.currCodPro}</TableCell>
                                   </TableRow>
                                 );
