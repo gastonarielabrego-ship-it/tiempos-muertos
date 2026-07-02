@@ -359,9 +359,9 @@ export default function SancionesForm() {
               <p className="text-[10px]" style={{ color: '#555' }}>Tiempo ocioso dentro de la jornada</p>
             </div>
 
-            {/* Summary stats: Bruto / Descanso / TM Informado */}
+            {/* Summary stats: Bruto / Descanso / TM Informado / Neto */}
             <div className="px-3 py-2 border-b border-slate-300 bg-slate-50/50">
-              <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="grid grid-cols-4 gap-3 text-center">
                 <div>
                   <p className="text-[9px] text-slate-500 uppercase tracking-wide">Tiempo Bruto</p>
                   <p className="text-base font-bold text-red-600 print:text-[14pt]">
@@ -381,6 +381,12 @@ export default function SancionesForm() {
                   </p>
                   <p className="text-[9px] text-purple-400">
                     {tmInf && tmInf.registros > 0 ? `${tmInf.registros} eventos` : '0 eventos'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-blue-500 uppercase tracking-wide">Tiempo Neto</p>
+                  <p className="text-base font-bold text-blue-700 print:text-[14pt]">
+                    {minToHM(Number(tiempoNetoMin))}
                   </p>
                 </div>
               </div>
