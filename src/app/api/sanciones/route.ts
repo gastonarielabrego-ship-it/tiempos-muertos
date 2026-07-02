@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     await tursoQuery(
       `INSERT INTO "Sancion" ("codUti","nomUti","turno","tiempoNeto","fechaMedicion","coordinador","sectorCoordinador","rrhh","evidencia","comentariosColaborador","comentariosCoordinador","sugerencias")
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         String(codUti),
         String(nomUti),
