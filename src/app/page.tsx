@@ -545,7 +545,23 @@ export default function DashboardPage() {
                 <CardContent className="p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                     <h3 className="text-sm font-semibold">Ranking por Suma de Tiempo Muerto</h3>
-                    <span className="text-xs text-muted-foreground">{stats.byOperator.length} operadores</span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => {
+                          const params = new URLSearchParams();
+                          if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+                          if (selectedDate !== 'all') params.set('fecha', selectedDate);
+                          window.open(`/api/export-ranking?${params}`, '_blank');
+                        }}
+                      >
+                        <Download className="h-3 w-3" />
+                        <span className="hidden sm:inline">Descargar Excel</span>
+                      </Button>
+                      <span className="text-xs text-muted-foreground">{stats.byOperator.length} operadores</span>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <Table>
