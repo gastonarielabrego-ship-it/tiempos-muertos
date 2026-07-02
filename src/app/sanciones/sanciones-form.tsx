@@ -177,9 +177,12 @@ export default function SancionesForm() {
       const ok = await collectAndSend();
       if (ok) {
         alert('Sancion registrada correctamente');
+      } else {
+        alert('Error al registrar la sancion en la base de datos.');
       }
     } catch (e) {
       console.error('Error saving:', e);
+      alert('Error al registrar la sancion.');
     } finally {
       setSaving(false);
     }
@@ -189,10 +192,16 @@ export default function SancionesForm() {
     setPrinting(true);
     try {
       syncFieldsForPrint();
-      await collectAndSend();
+      const saved = await collectAndSend();
+      if (!saved) {
+        alert('Error al guardar la sancion en la base de datos. No se procedera con la impresion.');
+        setPrinting(false);
+        return;
+      }
       window.print();
     } catch (e) {
       console.error('Error printing:', e);
+      alert('Error al guardar/imprimir la sancion.');
     } finally {
       setPrinting(false);
     }
