@@ -62,13 +62,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'codUti y nomUti son requeridos' }, { status: 400 });
     }
 
-    const safeStr = (v: unknown) => v ? `'${String(v).replace(/'/g, "''")}'` : 'NULL';
-    const safeNum = (v: unknown) => v !== null && v !== undefined ? Number(v) : 'NULL';
+    const toStr = (v: unknown) => (v !== null && v !== undefined && v !== '') ? String(v) : null;
 
-    await tursoQuery(`
-      INSERT INTO "Sancion" ("codUti","nomUti","turno","tiempoNeto","fechaMedicion","coordinador","sectorCoordinador","rrhh","evidencia","comentariosColaborador","comentariosCoordinador","sugerencias")
-      VALUES (${safeStr(codUti)},${safeStr(nomUti)},${safeStr(turno)},${safeNum(tiempoNeto)},${safeStr(fechaMedicion)},${safeStr(coordinador)},${safeStr(sectorCoordinador)},${safeStr(rrhh)},${safeStr(evidencia)},${safeStr(comentariosColaborador)},${safeStr(comentariosCoordinador)},${safeStr(sugerencias)})
-    `);
+    await tursoQuery(
+      `INSERT INTO "Sancion" ("codUti","nomUti","turno","tiempoNeto","fechaMedicion","coordinador","sectorCoordinador","rrhh","evidencia","comentariosColaborador","comentariosCoordinador","sugerencias")
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        String(codUti),
+        String(nomUti),
+        toStr(turno),
+        tiempoNeto !== null && tiempoNeto !== undefined ? Number(tiempoNeto) : null,
+        toStr(fechaMedicion),
+        toStr(coordinador),
+        toStr(sectorCoordinador),
+        toStr(rrhh),
+        toStr(evidencia),
+        toStr(comentariosColaborador),
+        toStr(comentariosCoordinador),
+        toStr(sugerencias),
+      ]
+    );
 
     // Get updated count for this operator
     const countResult = await tursoQuery(`SELECT COUNT(*) as c FROM "Sancion" WHERE "codUti" = ?`, [String(codUti)]);
@@ -77,7 +90,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, sancionCount });
   } catch (error) {
     console.error('Error creating sancion:', error);
-    return NextResponse.json({ error: 'Error al crear sanción' }, { status: 500 });
+    const msg = error instanceof Error ? error.message : 'Error al crear sanción';
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 

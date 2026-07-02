@@ -125,6 +125,8 @@ export default function SancionesForm() {
   }, [codUti]);
 
   /* ─── Collect all form data and POST to /api/sanciones ─── */
+  const lastError = useRef<string>('');
+
   const collectAndSend = async (): Promise<boolean> => {
     const evidencia = gaps.map(g =>
       `${g.fecha} | ${g.prevHora} - ${g.currHora} | ${fmtSec(g.gapSeconds)} | ${g.prevZonSts || '?'} -> ${g.currZonSts || '?'} | ${g.prevCodPro} -> ${g.currCodPro}`
@@ -143,12 +145,23 @@ export default function SancionesForm() {
       sugerencias: (document.getElementById('sugerencias') as HTMLTextAreaElement)?.value || '',
     };
 
-    const res = await fetch('/api/sanciones', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    return res.ok;
+    try {
+      const res = await fetch('/api/sanciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        lastError.current = data.error || `HTTP ${res.status}`;
+        return false;
+      }
+      lastError.current = '';
+      return true;
+    } catch (e) {
+      lastError.current = e instanceof Error ? e.message : 'Error de red';
+      return false;
+    }
   };
 
   /* ─── Copy dynamic fields for print rendering ─── */
@@ -178,11 +191,10 @@ export default function SancionesForm() {
       if (ok) {
         alert('Sancion registrada correctamente');
       } else {
-        alert('Error al registrar la sancion en la base de datos.');
+        alert('Error al guardar: ' + lastError.current);
       }
     } catch (e) {
       console.error('Error saving:', e);
-      alert('Error al registrar la sancion.');
     } finally {
       setSaving(false);
     }
@@ -194,7 +206,7 @@ export default function SancionesForm() {
       syncFieldsForPrint();
       const saved = await collectAndSend();
       if (!saved) {
-        alert('Error al guardar la sancion en la base de datos. No se procedera con la impresion.');
+        alert('Error al guardar: ' + lastError.current + '\nNo se procedera con la impresion.');
         setPrinting(false);
         return;
       }
