@@ -106,17 +106,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch TM informados (informed dead times)
+    // Fetch TM informados (informed dead times): total minutes and event count per operator
     let tmInfMap: Record<string, number> = {};
+    let tmInfEvMap: Record<string, number> = {};
     if (isTurso) {
       try {
         const tmResult = await tursoQuery(`
-          SELECT "operario", SUM("minutos") as totalMinutos
+          SELECT "operario", SUM("minutos") as totalMinutos, COUNT(*) as totalEventos
           FROM "TiemposMuertosInf"
           GROUP BY "operario"
         `);
         for (const row of tmResult.rows) {
           tmInfMap[String(row.operario)] = Number(row.totalMinutos);
+          tmInfEvMap[String(row.operario)] = Number(row.totalEventos);
         }
       } catch (e) {
         console.error('[stats] Error fetching TM informados:', e);
@@ -128,18 +130,24 @@ export async function GET(request: NextRequest) {
         const predTurno: Turno = (['TM', 'TT', 'TN'] as Turno[]).sort(
           (a, b) => d.turnos[b] - d.turnos[a]
         )[0];
+        // Bruto = raw dead time (unchanged)
         const brutoMin = Math.round((d.deadSec / 60) * 10) / 10;
+        // TM informados
         const tmInfMin = Math.round((tmInfMap[cod] || 0) * 10) / 10;
-        const brutoAjustadoMin = Math.max(0, Math.round((brutoMin - tmInfMin) * 10) / 10);
-        const descansoBruto = d.dias.size * 60;
-        const descansoReal = Math.min(descansoBruto, brutoAjustadoMin);
-        const netoMin = Math.round((brutoAjustadoMin - descansoReal) * 10) / 10;
+        const tmInfEventos = tmInfEvMap[cod] || 0;
+        // Descanso: only for TM and TT (NOT TN)
+        const tieneDescanso = predTurno !== 'TN';
+        const descansoBruto = tieneDescanso ? d.dias.size * 60 : 0;
+        const descansoReal = Math.min(descansoBruto, brutoMin);
+        // Neto = Bruto - Descanso - TM Informados
+        const netoMin = Math.max(0, Math.round((brutoMin - descansoReal - tmInfMin) * 10) / 10);
         return {
           codUti: cod,
           nomUti: d.name,
-          totalMin: brutoAjustadoMin,
-          totalMinSec: Math.round(brutoAjustadoMin * 60),
+          totalMin: brutoMin,
+          totalMinSec: Math.round(brutoMin * 60),
           tmInfMin,
+          tmInfEventos,
           descansoMin: descansoReal,
           descansoMinSec: descansoReal * 60,
           totalNetoMin: netoMin,
@@ -151,7 +159,7 @@ export async function GET(request: NextRequest) {
           totalBultos: bultosMap.get(cod) || 0,
         };
       })
-      .sort((a, b) => b.totalMin - a.totalMin);
+      .sort((a, b) => b.totalNetoMin - a.totalNetoMin);
 
     return NextResponse.json({
       kpis: {

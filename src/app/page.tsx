@@ -38,6 +38,7 @@ interface OpStat {
   totalMin: number;
   totalMinSec: number;
   tmInfMin: number;
+  tmInfEventos: number;
   descansoMin: number;
   descansoMinSec: number;
   totalNetoMin: number;
@@ -509,10 +510,15 @@ export default function DashboardPage() {
                       <span className="text-xs text-right font-bold text-red-600">{fmtDur(selectedOpStats.totalMinSec)}</span>
                       <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.totalMin} min</span>
                     </div>
+                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-purple-100">
+                      <span className="text-[10px] text-muted-foreground">TM Informados</span>
+                      <span className="text-xs text-right font-bold text-purple-700">{selectedOpStats.tmInfMin > 0 ? `-${selectedOpStats.tmInfMin} min` : '—'}</span>
+                      <span className="text-[10px] text-right text-purple-500">{selectedOpStats.tmInfEventos > 0 ? `${selectedOpStats.tmInfEventos} eventos` : '—'}</span>
+                    </div>
                     <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-slate-200">
                       <span className="text-[10px] text-muted-foreground">Descanso</span>
                       <span className="text-xs text-right font-medium text-slate-500">{selectedOpStats.descansoMin > 0 ? `-${fmtDur(selectedOpStats.descansoMinSec)}` : '—'}</span>
-                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.descansoMin > 0 ? `-${selectedOpStats.descansoMin} min (${selectedOpStats.diasTrabajados}d x 60m)` : '—'}</span>
+                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.descansoMin > 0 ? `-${selectedOpStats.descansoMin} min (${selectedOpStats.diasTrabajados}d x 60m)` : selectedOpStats.turno === 'TN' ? 'no aplica (TN)' : '—'}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-2 items-center py-1.5 bg-green-50/60 rounded px-1">
                       <span className="text-[10px] font-semibold text-green-700">Tiempo Neto</span>
@@ -599,7 +605,7 @@ export default function DashboardPage() {
                           <TableHead className="text-xs">Operador</TableHead>
                           <TableHead className="text-xs text-center">Turno</TableHead>
                           <TableHead className="text-xs text-right">T. Muerto Inf.</TableHead>
-                          <TableHead className="text-xs text-right">T. Bruto Ajust.</TableHead>
+                          <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
                           <TableHead className="text-xs text-right">Descanso</TableHead>
                           <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
                           <TableHead className="text-xs text-center">Dias</TableHead>
@@ -631,6 +637,7 @@ export default function DashboardPage() {
                                 <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
                                   {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
                                 </span>
+                                {op.tmInfEventos > 0 && <div className="text-[9px] text-purple-500 text-center">{op.tmInfEventos} ev.</div>}
                               </TableCell>
                               <TableCell className="text-xs text-right font-bold">
                                 <span className={isTop3 ? 'text-red-600' : op.totalMin > 100 ? 'text-orange-600' : ''}>
