@@ -16,3 +16,22 @@ Stage Summary:
 - 853 events > 5 min found, totaling 147.5 hours of dead time
 - All movements visible with pagination, red rows for > 5 min gaps
 - Simplified from 3 tabs + 5 charts to single-page layout
+---
+Task ID: 1
+Agent: main
+Task: Rewrite sanciones-form.tsx to replicate the DOCX template "PEDIDO DE EXPLICACION PREPARACION STD"
+
+Work Log:
+- Read uploaded DOCX template to extract structure: header image, two-column data table, evidencia section, comments sections, 3-column signatures, footer image
+- Extracted header-bg.png and footer-bg.png from DOCX to /public/
+- Verified all 4 sanciones files already existed (API routes + page + form)
+- Confirmed column order already correct: Bruto / Descanso / TM Inf / Neto
+- Completely rewrote sanciones-form.tsx to match DOCX template layout
+- Updated globals.css with print styles (A4, margin: 0 for full-bleed header/footer images)
+- Verified build compiles successfully
+
+Stage Summary:
+- sanciones-form.tsx now replicates: header image, title, two-column table (colaborador + coordinadores), date row, evidencia del caso with auto-populated gap evidence, comments sections (colaborador, coordinador, sugerencias), 3-column signatures, footer image
+- Print/screen dual rendering preserved with print:hidden/hidden print:block pattern
+- A4 print layout with 0 margin for full-bleed company header/footer
+- All existing API routes (sanciones GET/POST, export-sanciones) work unchanged
