@@ -227,6 +227,24 @@ async function ensureTables() {
       )
     `);
     await tursoQuery(`CREATE INDEX IF NOT EXISTS "TiemposMuertosInf_operario_idx" ON "TiemposMuertosInf"("operario")`);
+    await tursoQuery(`
+      CREATE TABLE IF NOT EXISTS "Sancion" (
+        "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        "codUti" TEXT NOT NULL,
+        "nomUti" TEXT NOT NULL,
+        "turno" TEXT,
+        "tiempoNeto" REAL,
+        "fechaMedicion" TEXT,
+        "coordinador" TEXT,
+        "sectorCoordinador" TEXT,
+        "rrhh" TEXT,
+        "evidencia" TEXT,
+        "comentariosColaborador" TEXT,
+        "comentariosCoordinador" TEXT,
+        "sugerencias" TEXT,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
     console.log('[db] Turso tables ready');
   } catch (e) {
     console.error('[db] Auto-create table error:', e);

@@ -13,7 +13,7 @@ import {
   Upload, RefreshCw, Clock, BarChart3, AlertTriangle,
   Loader2, Database, Timer, ChevronLeft, ChevronRight,
   X, ArrowDown, Trophy, ArrowRight, User, Sun, Sunset, Moon,
-  PlayCircle, StopCircle, Download, FileSpreadsheet,
+  PlayCircle, StopCircle, Download, FileSpreadsheet, Shield,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -116,7 +116,7 @@ function TurnoBadge({ turno }: { turno: string }) {
   );
 }
 
-type TabType = 'ranking' | 'operador' | 'picks';
+type TabType = 'ranking' | 'operador' | 'picks' | 'sanciones';
 
 // --- Main Page ---
 export default function DashboardPage() {
@@ -145,6 +145,9 @@ export default function DashboardPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tmInfInputRef = useRef<HTMLInputElement>(null);
   const [tmInfUploading, setTmInfUploading] = useState(false);
+  const [sancionCount, setSancionCount] = useState(0);
+  const [sanciones, setSanciones] = useState<any[]>([]);
+  const [sancionesLoading, setSancionesLoading] = useState(false);
   const { toast } = useToast();
 
   const fetchFilters = useCallback(async () => {
@@ -224,6 +227,21 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchFilters(); }, [fetchFilters]);
 
+  const fetchSanciones = useCallback(async () => {
+    setSancionesLoading(true);
+    try {
+      const res = await fetch('/api/sanciones');
+      const data = await res.json();
+      setSanciones(data.sanciones || []);
+      if (selectedOp !== 'all' && data.countsByOp) {
+        setSancionCount(data.countsByOp[selectedOp]?.count || 0);
+      } else {
+        setSancionCount(data.total || 0);
+      }
+    } catch { /* silent */ }
+    finally { setSancionesLoading(false); }
+  }, [selectedOp]);
+
   useEffect(() => {
     if (hasData) { fetchStats(); fetchGaps(1); fetchPicks(1); }
     else { setLoading(false); }
@@ -234,6 +252,7 @@ export default function DashboardPage() {
     fetchStats();
     if (activeTab === 'operador' && selectedOp !== 'all') fetchGaps(1);
     if (activeTab === 'picks') fetchPicks(1);
+    if (activeTab === 'sanciones') fetchSanciones();
   }, [selectedOp, selectedTurno, selectedDate, activeTab, hasData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpChange = (val: string) => {
@@ -503,6 +522,22 @@ export default function DashboardPage() {
                     <User className="h-4 w-4 text-red-500" />
                     <h3 className="text-sm font-semibold text-red-700">{selectedOpName}</h3>
                     <TurnoBadge turno={selectedOpStats.turno} />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+                      onClick={() => {
+                        const params = new URLSearchParams();
+                        params.set('codUti', selectedOp);
+                        params.set('nomUti', selectedOpName || '');
+                        params.set('turno', selectedOpStats.turno);
+                        params.set('tiempoNetoMin', String(selectedOpStats.totalNetoMin));
+                        window.open(`/sanciones?${params}`, '_blank');
+                      }}
+                    >
+                      <Shield className="h-3 w-3" />
+                      Sanción
+                    </Button>
                   </div>
                   <div className="space-y-1.5 text-sm">
                     <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-red-100">
@@ -570,6 +605,20 @@ export default function DashboardPage() {
                   <PlayCircle className="h-3 w-3 inline mr-1" />
                   Picks
                 </button>
+                <button
+                  onClick={() => setActiveTab('sanciones')}
+                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors relative ${
+                    activeTab === 'sanciones' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Shield className="h-3 w-3 inline mr-1" />
+                  Sanciones
+                  {sancionCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full h-4 min-w-4 flex items-center justify-center px-1">
+                      {sancionCount}
+                    </span>
+                  )}
+                </button>
               </div>
             )}
 
@@ -604,9 +653,9 @@ export default function DashboardPage() {
                           <TableHead className="text-xs w-12 text-center">#</TableHead>
                           <TableHead className="text-xs">Operador</TableHead>
                           <TableHead className="text-xs text-center">Turno</TableHead>
-                          <TableHead className="text-xs text-right">T. Muerto Inf.</TableHead>
                           <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
                           <TableHead className="text-xs text-right">Descanso</TableHead>
+                          <TableHead className="text-xs text-right">T. Muerto Inf.</TableHead>
                           <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
                           <TableHead className="text-xs text-center">Dias</TableHead>
                           <TableHead className="text-xs text-right">Bultos</TableHead>
@@ -633,12 +682,6 @@ export default function DashboardPage() {
                                 <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
                               </TableCell>
                               <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
-                              <TableCell className="text-right">
-                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
-                                  {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
-                                </span>
-                                {op.tmInfEventos > 0 && <div className="text-[9px] text-purple-500 text-center">{op.tmInfEventos} ev.</div>}
-                              </TableCell>
                               <TableCell className="text-xs text-right font-bold">
                                 <span className={isTop3 ? 'text-red-600' : op.totalMin > 100 ? 'text-orange-600' : ''}>
                                   {fmtDur(op.totalMinSec)}
@@ -646,6 +689,12 @@ export default function DashboardPage() {
                               </TableCell>
                               <TableCell className="text-right">
                                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{op.descansoMin > 0 ? `-${fmtDur(op.descansoMinSec)}` : '—'}</span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
+                                  {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
+                                </span>
+                                {op.tmInfEventos > 0 && <div className="text-[9px] text-purple-500 text-center">{op.tmInfEventos} ev.</div>}
                               </TableCell>
                               <TableCell className="text-xs text-right font-bold">
                                 <span className="text-green-700">
@@ -905,6 +954,138 @@ export default function DashboardPage() {
                   )}
                 </CardContent>
               </Card>
+            )}
+
+            {/* ===================== SANCIONES TAB ===================== */}
+            {activeTab === 'sanciones' && (
+              <div className="space-y-4">
+                {/* Summary cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <Card>
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className="rounded-lg bg-red-500 p-2"><Shield className="h-4 w-4 text-white" /></div>
+                      <div>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Total Sanciones</p>
+                        <p className="text-lg sm:text-2xl font-bold">{sanciones.length}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className="rounded-lg bg-orange-500 p-2"><User className="h-4 w-4 text-white" /></div>
+                      <div>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Operadores Sancionados</p>
+                        <p className="text-lg sm:text-2xl font-bold">{new Set(sanciones.map((s: any) => s.codUti)).size}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className="rounded-lg bg-amber-500 p-2"><Clock className="h-4 w-4 text-white" /></div>
+                      <div>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Esta Semana</p>
+                        <p className="text-lg sm:text-2xl font-bold">{sanciones.filter((s: any) => { const d = new Date(s.createdAt); const now = new Date(); const diff = (now.getTime() - d.getTime()) / 86400000; return diff <= 7; }).length}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className="rounded-lg bg-purple-500 p-2"><AlertTriangle className="h-4 w-4 text-white" /></div>
+                      <div>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Esta Quincena</p>
+                        <p className="text-lg sm:text-2xl font-bold">{sanciones.filter((s: any) => { const d = new Date(s.createdAt); const now = new Date(); const diff = (now.getTime() - d.getTime()) / 86400000; return diff <= 15; }).length}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      if (selectedOp !== 'all') {
+                        params.set('codUti', selectedOp);
+                        params.set('nomUti', selectedOpName || '');
+                        const opStat = stats?.byOperator.find(o => o.codUti === selectedOp);
+                        params.set('turno', opStat?.turno || '');
+                        params.set('tiempoNetoMin', String(opStat?.totalNetoMin || 0));
+                      }
+                      window.open(`/sanciones?${params}`, '_blank');
+                    }}
+                  >
+                    <Shield className="h-3 w-3" />
+                    Nueva Sanción
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => window.open('/api/export-sanciones', '_blank')}
+                  >
+                    <Download className="h-3 w-3" />
+                    Descargar Excel
+                  </Button>
+                </div>
+
+                {/* History table */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h3 className="text-sm font-semibold mb-3">Historial de Sanciones</h3>
+                    {sancionesLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+                      </div>
+                    ) : sanciones.length === 0 ? (
+                      <div className="text-center py-12 text-sm text-muted-foreground">No hay sanciones registradas</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-xs">Fecha</TableHead>
+                              <TableHead className="text-xs">Legajo</TableHead>
+                              <TableHead className="text-xs">Nombre</TableHead>
+                              <TableHead className="text-xs text-center">Turno</TableHead>
+                              <TableHead className="text-xs text-right">T. Neto</TableHead>
+                              <TableHead className="text-xs">Fecha Medición</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {sanciones.slice(0, 50).map((s: any, i: number) => (
+                              <TableRow
+                                key={s.id}
+                                className={`${i === 0 ? 'bg-red-50 hover:bg-red-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+                                onClick={() => {
+                                  setSelectedOp(s.codUti);
+                                  setActiveTab('operador');
+                                }}
+                              >
+                                <TableCell className="text-xs whitespace-nowrap">
+                                  {s.createdAt ? s.createdAt.split('T')[0] : ''}
+                                </TableCell>
+                                <TableCell className="text-xs font-mono">{s.codUti}</TableCell>
+                                <TableCell className="text-xs">{s.nomUti}</TableCell>
+                                <TableCell className="text-center">
+                                  {s.turno && <TurnoBadge turno={s.turno} />}
+                                </TableCell>
+                                <TableCell className="text-xs text-right font-bold text-red-600">
+                                  {s.tiempoNeto != null ? `${s.tiempoNeto} min` : '—'}
+                                </TableCell>
+                                <TableCell className="text-xs whitespace-nowrap">{s.fechaMedicion || ''}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             )}
           </>
         )}
