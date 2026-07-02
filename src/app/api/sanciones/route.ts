@@ -32,9 +32,13 @@ export async function GET() {
     const countsByOp: Record<string, { count: number; lastDate: string }> = {};
     for (const s of sanciones) {
       if (!countsByOp[s.codUti]) {
-        countsByOp[s.codUti] = { count: 0, lastDate: s.createdAt || '' };
+        countsByOp[s.codUti] = { count: 0, lastDate: '' };
       }
       countsByOp[s.codUti].count++;
+      const d = s.createdAt || '';
+      if (d > countsByOp[s.codUti].lastDate) {
+        countsByOp[s.codUti].lastDate = d.split('T')[0];
+      }
     }
 
     return NextResponse.json({ sanciones, countsByOp, total: sanciones.length });
@@ -74,5 +78,27 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating sancion:', error);
     return NextResponse.json({ error: 'Error al crear sanción' }, { status: 500 });
+  }
+}
+
+// DELETE: Remove a sancion by id
+export async function DELETE(request: NextRequest) {
+  try {
+    if (!isTurso) {
+      return NextResponse.json({ error: 'Solo disponible en producción (Turso)' }, { status: 400 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ error: 'id es requerido' }, { status: 400 });
+    }
+
+    await tursoQuery(`DELETE FROM "Sancion" WHERE "id" = ?`, [Number(id)]);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting sancion:', error);
+    return NextResponse.json({ error: 'Error al eliminar sanción' }, { status: 500 });
   }
 }

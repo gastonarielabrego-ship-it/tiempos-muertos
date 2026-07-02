@@ -14,6 +14,7 @@ import {
   Loader2, Database, Timer, ChevronLeft, ChevronRight,
   X, ArrowDown, Trophy, ArrowRight, User, Sun, Sunset, Moon,
   PlayCircle, StopCircle, Download, FileSpreadsheet, Shield,
+  Trash2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -147,6 +148,7 @@ export default function DashboardPage() {
   const [tmInfUploading, setTmInfUploading] = useState(false);
   const [sancionCount, setSancionCount] = useState(0);
   const [sanciones, setSanciones] = useState<any[]>([]);
+  const [sancionesCounts, setSancionesCounts] = useState<Record<string, { count: number; lastDate: string }>>({});
   const [sancionesLoading, setSancionesLoading] = useState(false);
   const { toast } = useToast();
 
@@ -233,6 +235,7 @@ export default function DashboardPage() {
       const res = await fetch('/api/sanciones');
       const data = await res.json();
       setSanciones(data.sanciones || []);
+      setSancionesCounts(data.countsByOp || {});
       if (selectedOp !== 'all' && data.countsByOp) {
         setSancionCount(data.countsByOp[selectedOp]?.count || 0);
       } else {
@@ -241,6 +244,18 @@ export default function DashboardPage() {
     } catch { /* silent */ }
     finally { setSancionesLoading(false); }
   }, [selectedOp]);
+
+  const handleDeleteSancion = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Eliminar esta sancion?')) return;
+    try {
+      const res = await fetch(`/api/sanciones?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast({ title: 'Sancion eliminada' });
+        fetchSanciones();
+      }
+    } catch { /* silent */ }
+  };
 
   useEffect(() => {
     if (hasData) { fetchStats(); fetchGaps(1); fetchPicks(1); }
@@ -532,6 +547,8 @@ export default function DashboardPage() {
                         params.set('nomUti', selectedOpName || '');
                         params.set('turno', selectedOpStats.turno);
                         params.set('tiempoNetoMin', String(selectedOpStats.totalNetoMin));
+                        params.set('tiempoBrutoMin', String(selectedOpStats.totalMin));
+                        params.set('descansoMin', String(selectedOpStats.descansoMin));
                         window.open(`/sanciones?${params}`, '_blank');
                       }}
                     >
@@ -1013,6 +1030,8 @@ export default function DashboardPage() {
                         const opStat = stats?.byOperator.find(o => o.codUti === selectedOp);
                         params.set('turno', opStat?.turno || '');
                         params.set('tiempoNetoMin', String(opStat?.totalNetoMin || 0));
+                        params.set('tiempoBrutoMin', String(opStat?.totalMin || 0));
+                        params.set('descansoMin', String(opStat?.descansoMin || 0));
                       }
                       window.open(`/sanciones?${params}`, '_blank');
                     }}
@@ -1052,33 +1071,56 @@ export default function DashboardPage() {
                               <TableHead className="text-xs">Nombre</TableHead>
                               <TableHead className="text-xs text-center">Turno</TableHead>
                               <TableHead className="text-xs text-right">T. Neto</TableHead>
-                              <TableHead className="text-xs">Fecha Medición</TableHead>
+                              <TableHead className="text-xs">Fecha Med.</TableHead>
+                              <TableHead className="text-xs text-center">Sanc.</TableHead>
+                              <TableHead className="text-xs">Ultima Sanc.</TableHead>
+                              <TableHead className="text-xs w-10"></TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {sanciones.slice(0, 50).map((s: any, i: number) => (
-                              <TableRow
-                                key={s.id}
-                                className={`${i === 0 ? 'bg-red-50 hover:bg-red-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
-                                onClick={() => {
-                                  setSelectedOp(s.codUti);
-                                  setActiveTab('operador');
-                                }}
-                              >
-                                <TableCell className="text-xs whitespace-nowrap">
-                                  {s.createdAt ? s.createdAt.split('T')[0] : ''}
-                                </TableCell>
-                                <TableCell className="text-xs font-mono">{s.codUti}</TableCell>
-                                <TableCell className="text-xs">{s.nomUti}</TableCell>
-                                <TableCell className="text-center">
-                                  {s.turno && <TurnoBadge turno={s.turno} />}
-                                </TableCell>
-                                <TableCell className="text-xs text-right font-bold text-red-600">
-                                  {s.tiempoNeto != null ? `${s.tiempoNeto} min` : '—'}
-                                </TableCell>
-                                <TableCell className="text-xs whitespace-nowrap">{s.fechaMedicion || ''}</TableCell>
-                              </TableRow>
-                            ))}
+                            {sanciones.slice(0, 50).map((s: any, i: number) => {
+                              const counts = sancionesCounts[s.codUti];
+                              return (
+                                <TableRow
+                                  key={s.id}
+                                  className={`${i === 0 ? 'bg-red-50 hover:bg-red-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+                                  onClick={() => {
+                                    setSelectedOp(s.codUti);
+                                    setActiveTab('operador');
+                                  }}
+                                >
+                                  <TableCell className="text-xs whitespace-nowrap">
+                                    {s.createdAt ? s.createdAt.split('T')[0] : ''}
+                                  </TableCell>
+                                  <TableCell className="text-xs font-mono">{s.codUti}</TableCell>
+                                  <TableCell className="text-xs">{s.nomUti}</TableCell>
+                                  <TableCell className="text-center">
+                                    {s.turno && <TurnoBadge turno={s.turno} />}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-right font-bold text-red-600">
+                                    {s.tiempoNeto != null ? `${s.tiempoNeto} min` : '—'}
+                                  </TableCell>
+                                  <TableCell className="text-xs whitespace-nowrap">{s.fechaMedicion || ''}</TableCell>
+                                  <TableCell className="text-xs text-center">
+                                    <span className="inline-flex items-center justify-center bg-red-100 text-red-700 text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5">
+                                      {counts?.count || 0}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
+                                    {counts?.lastDate || '—'}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <button
+                                      onClick={(e) => handleDeleteSancion(s.id, e)}
+                                      className="p-1 rounded hover:bg-red-100 text-slate-400 hover:text-red-600 transition-colors"
+                                      title="Eliminar sancion"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </div>

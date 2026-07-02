@@ -75,7 +75,15 @@ export default function SancionesForm() {
   const nomUti = searchParams.get('nomUti') || '';
   const turno = searchParams.get('turno') || '';
   const tiempoNetoMin = searchParams.get('tiempoNetoMin') || '0';
+  const tiempoBrutoMin = searchParams.get('tiempoBrutoMin') || '0';
+  const descansoMin = searchParams.get('descansoMin') || '0';
   const fechaMedicion = searchParams.get('fechaMedicion') || '';
+
+  function minToHM(min: number): string {
+    const h = Math.floor(min / 60);
+    const m = Math.round(min % 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  }
 
   const [gaps, setGaps] = useState<GapItem[]>([]);
   const [tmInf, setTmInf] = useState<TmInfData | null>(null);
@@ -345,52 +353,36 @@ export default function SancionesForm() {
               <span className="text-[11px] font-bold print:text-[12pt]">Evidencia del Caso</span>
             </div>
 
-            {/* Incidencia header */}
+            {/* Incidencia - single row */}
             <div className="px-3 py-1.5 border-b border-slate-300">
-              <table className="w-full">
-                <tbody>
-                  <tr>
-                    <td className="text-[11px] font-bold py-0.5 print:text-[11pt] border-r border-slate-300 pr-3" style={{ width: '50%' }}>
-                      Incidencia Proceso Operaciones
-                    </td>
-                    <td className="text-[11px] font-bold py-0.5 pl-3 print:text-[11pt]">
-                      Incidencia Proceso Operaciones
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="text-[10px] py-0.5 border-r border-slate-300 pr-3" style={{ color: '#555' }}>
-                      Tiempo ocioso dentro de la jornada
-                    </td>
-                    <td className="text-[10px] py-0.5 pl-3 italic text-slate-500">
-                      (completado automaticamente con el resumen del colaborador a sancionar)
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <p className="text-[11px] font-bold print:text-[11pt]">Incidencia Proceso Operaciones</p>
+              <p className="text-[10px]" style={{ color: '#555' }}>Tiempo ocioso dentro de la jornada</p>
             </div>
 
-            {/* Summary stats */}
+            {/* Summary stats: Bruto / Descanso / TM Informado */}
             <div className="px-3 py-2 border-b border-slate-300 bg-slate-50/50">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <p className="text-[9px] text-slate-500 uppercase tracking-wide">Tiempo Neto</p>
-                  <p className="text-lg font-bold text-red-600 print:text-[16pt]">
-                    {Number(tiempoNetoMin).toFixed(1)} min
+                  <p className="text-[9px] text-slate-500 uppercase tracking-wide">Tiempo Bruto</p>
+                  <p className="text-base font-bold text-red-600 print:text-[14pt]">
+                    {minToHM(Number(tiempoBrutoMin))}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-slate-500 uppercase tracking-wide">Eventos Detectados</p>
-                  <p className="text-lg font-bold text-slate-800 print:text-[16pt]">{gaps.length}</p>
+                  <p className="text-[9px] text-slate-500 uppercase tracking-wide">Descanso</p>
+                  <p className="text-base font-bold text-slate-600 print:text-[14pt]">
+                    {Number(descansoMin) > 0 ? minToHM(Number(descansoMin)) : '0'}
+                  </p>
                 </div>
-                {tmInf && tmInf.totalMinutos > 0 && (
-                  <div>
-                    <p className="text-[9px] text-purple-500 uppercase tracking-wide">TM Informados</p>
-                    <p className="text-lg font-bold text-purple-700 print:text-[16pt]">
-                      {tmInf.totalMinutos} min
-                    </p>
-                    <p className="text-[9px] text-purple-400">{tmInf.registros} eventos</p>
-                  </div>
-                )}
+                <div>
+                  <p className="text-[9px] text-purple-500 uppercase tracking-wide">TM Informado</p>
+                  <p className="text-base font-bold text-purple-700 print:text-[14pt]">
+                    {tmInf && tmInf.totalMinutos > 0 ? `${tmInf.totalMinutos} min` : '0 min'}
+                  </p>
+                  <p className="text-[9px] text-purple-400">
+                    {tmInf && tmInf.registros > 0 ? `${tmInf.registros} eventos` : '0 eventos'}
+                  </p>
+                </div>
               </div>
             </div>
 
