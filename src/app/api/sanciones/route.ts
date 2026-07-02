@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'codUti y nomUti son requeridos' }, { status: 400 });
     }
 
-    const toStr = (v: unknown) => (v !== null && v !== undefined && v !== '') ? String(v) : null;
+    const toStr = (v: unknown) => (v !== null && v !== undefined && v !== '') ? String(v) : '';
 
     await tursoQuery(
       `INSERT INTO "Sancion" ("codUti","nomUti","turno","tiempoNeto","fechaMedicion","coordinador","sectorCoordinador","rrhh","evidencia","comentariosColaborador","comentariosCoordinador","sugerencias")
