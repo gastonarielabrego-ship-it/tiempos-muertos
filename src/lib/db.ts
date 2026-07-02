@@ -211,6 +211,22 @@ async function ensureTables() {
     `);
     await tursoQuery(`CREATE INDEX IF NOT EXISTS "ScanRecord_codUti_fecha_idx" ON "ScanRecord"("codUti", "fecha")`);
     await tursoQuery(`CREATE INDEX IF NOT EXISTS "ScanRecord_fecha_idx" ON "ScanRecord"("fecha")`);
+    await tursoQuery(`
+      CREATE TABLE IF NOT EXISTS "TiemposMuertosInf" (
+        "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        "fecha" INTEGER NOT NULL,
+        "turno" TEXT NOT NULL,
+        "operario" TEXT NOT NULL,
+        "nombre" TEXT,
+        "estado" TEXT,
+        "motivo" INTEGER,
+        "descripcionMotivo" TEXT,
+        "minutos" INTEGER NOT NULL DEFAULT 0,
+        "fechaDesde" INTEGER,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await tursoQuery(`CREATE INDEX IF NOT EXISTS "TiemposMuertosInf_operario_idx" ON "TiemposMuertosInf"("operario")`);
     console.log('[db] Turso tables ready');
   } catch (e) {
     console.error('[db] Auto-create table error:', e);
@@ -220,5 +236,5 @@ async function ensureTables() {
 // Init on first import
 ensureTables();
 
-export { isTurso, getLibsqlClient };
+export { isTurso, getLibsqlClient, tursoQuery };
 export type { ScanRecordRow };

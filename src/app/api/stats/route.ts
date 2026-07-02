@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, isTurso, tursoQuery } from '@/lib/db';
 
 const DEAD_TIME_THRESHOLD = 300;
 
@@ -106,20 +106,40 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Fetch TM informados (informed dead times)
+    let tmInfMap: Record<string, number> = {};
+    if (isTurso) {
+      try {
+        const tmResult = await tursoQuery(`
+          SELECT "operario", SUM("minutos") as totalMinutos
+          FROM "TiemposMuertosInf"
+          GROUP BY "operario"
+        `);
+        for (const row of tmResult.rows) {
+          tmInfMap[String(row.operario)] = Number(row.totalMinutos);
+        }
+      } catch (e) {
+        console.error('[stats] Error fetching TM informados:', e);
+      }
+    }
+
     const byOperator = Array.from(opMap.entries())
       .map(([cod, d]) => {
         const predTurno: Turno = (['TM', 'TT', 'TN'] as Turno[]).sort(
           (a, b) => d.turnos[b] - d.turnos[a]
         )[0];
         const brutoMin = Math.round((d.deadSec / 60) * 10) / 10;
+        const tmInfMin = Math.round((tmInfMap[cod] || 0) * 10) / 10;
+        const brutoAjustadoMin = Math.max(0, Math.round((brutoMin - tmInfMin) * 10) / 10);
         const descansoBruto = d.dias.size * 60;
-        const descansoReal = Math.min(descansoBruto, brutoMin);
-        const netoMin = Math.round((brutoMin - descansoReal) * 10) / 10;
+        const descansoReal = Math.min(descansoBruto, brutoAjustadoMin);
+        const netoMin = Math.round((brutoAjustadoMin - descansoReal) * 10) / 10;
         return {
           codUti: cod,
           nomUti: d.name,
-          totalMin: brutoMin,
-          totalMinSec: Math.round(brutoMin * 60),
+          totalMin: brutoAjustadoMin,
+          totalMinSec: Math.round(brutoAjustadoMin * 60),
+          tmInfMin,
           descansoMin: descansoReal,
           descansoMinSec: descansoReal * 60,
           totalNetoMin: netoMin,

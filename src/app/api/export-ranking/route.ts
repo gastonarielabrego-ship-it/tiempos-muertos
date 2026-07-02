@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, isTurso, tursoQuery } from '@/lib/db';
 import * as XLSX from 'xlsx';
 
 const DEAD_TIME_THRESHOLD = 300;
@@ -112,16 +112,44 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Fetch TM informados (same logic as /api/stats)
+    let tmInfMap: Record<string, number> = {};
+    if (isTurso) {
+      try {
+        const tmResult = await tursoQuery(`
+          SELECT "operario", SUM("minutos") as totalMinutos
+          FROM "TiemposMuertosInf"
+          GROUP BY "operario"
+        `);
+        for (const row of tmResult.rows) {
+          tmInfMap[String(row.operario)] = Number(row.totalMinutos);
+        }
+      } catch (e) {
+        console.error('[export-ranking] Error fetching TM informados:', e);
+      }
+    }
+
     const byOperator = Array.from(opMap.entries())
       .map(([cod, d]) => {
         const predTurno: Turno = (['TM', 'TT', 'TN'] as Turno[]).sort((a, b) => d.turnos[b] - d.turnos[a])[0];
         const brutoMin = Math.round((d.deadSec / 60) * 10) / 10;
+        const tmInfMin = Math.round((tmInfMap[cod] || 0) * 10) / 10;
+        const brutoAjustadoMin = Math.max(0, Math.round((brutoMin - tmInfMin) * 10) / 10);
         const descansoBruto = d.dias.size * 60;
-        const descansoReal = Math.min(descansoBruto, brutoMin);
-        const netoMin = Math.round((brutoMin - descansoReal) * 10) / 10;
-        return { cod, name: d.name, brutoMin, brutoSec: d.deadSec, descansoReal, descansoSec: descansoReal * 60, netoMin, netoSec: Math.round(netoMin * 60), dias: d.dias.size, events: d.events, maxSec: d.maxSec, turno: predTurno, bultos: bultosMap.get(cod) || 0 };
+        const descansoReal = Math.min(descansoBruto, brutoAjustadoMin);
+        const netoMin = Math.round((brutoAjustadoMin - descansoReal) * 10) / 10;
+        return {
+          cod, name: d.name,
+          brutoMin, brutoSec: d.deadSec,
+          tmInfMin,
+          brutoAjustadoMin, brutoAjustadoSec: Math.round(brutoAjustadoMin * 60),
+          descansoReal, descansoSec: descansoReal * 60,
+          netoMin, netoSec: Math.round(netoMin * 60),
+          dias: d.dias.size, events: d.events, maxSec: d.maxSec,
+          turno: predTurno, bultos: bultosMap.get(cod) || 0,
+        };
       })
-      .sort((a, b) => b.brutoMin - a.brutoMin);
+      .sort((a, b) => b.brutoAjustadoMin - a.brutoAjustadoMin);
 
     // --- Build Excel ---
 
@@ -130,14 +158,17 @@ export async function GET(request: NextRequest) {
     // Sheet 1: Ranking
     const rHeader = [
       '#', 'Legajo', 'Apellido y Nombre', 'Turno Pred.',
-      'Tiempo Bruto (min)', 'Tiempo Bruto (HH:MM:SS)',
+      'T. Muerto Inf. (min)', 'T. Bruto (min)', 'T. Bruto (HH:MM:SS)',
+      'T. Bruto Ajust. (min)', 'T. Bruto Ajust. (HH:MM:SS)',
       'Descanso (min)', 'Descanso (HH:MM:SS)',
-      'Tiempo Neto (min)', 'Tiempo Neto (HH:MM:SS)',
+      'T. Neto (min)', 'T. Neto (HH:MM:SS)',
       'Dias Trab.', 'Eventos', 'Mayor Gap', 'Mayor Gap (HH:MM:SS)', 'Bultos',
     ];
     const rRows = byOperator.map((op, i) => [
       i + 1, op.cod, op.name, op.turno,
+      op.tmInfMin,
       op.brutoMin, fmtHMS(op.brutoSec),
+      op.brutoAjustadoMin, fmtHMS(op.brutoAjustadoSec),
       op.descansoReal, fmtHMS(op.descansoSec),
       op.netoMin, fmtHMS(op.netoSec),
       op.dias, op.events,
@@ -148,30 +179,46 @@ export async function GET(request: NextRequest) {
     const ws1 = XLSX.utils.aoa_to_sheet([rHeader, ...rRows]);
     ws1['!cols'] = [
       { wch: 4 }, { wch: 16 }, { wch: 28 }, { wch: 10 },
-      { wch: 16 }, { wch: 16 },
+      { wch: 18 }, { wch: 16 }, { wch: 16 },
+      { wch: 20 }, { wch: 20 },
       { wch: 14 }, { wch: 16 },
       { wch: 16 }, { wch: 16 },
       { wch: 10 }, { wch: 8 }, { wch: 14 }, { wch: 16 },
       { wch: 10 },
     ];
 
-    // Bold header style
+    // Bold header style - red for TM Inf column, blue for bruto, green for neto
+    const headerColors: Record<number, string> = {
+      4: 'E8D5F5',  // TM Informados - purple
+      5: 'FFE0E0',  // Bruto - red
+      6: 'FFE0E0',
+      7: 'D6EAF8',  // Bruto Ajustado - blue
+      8: 'D6EAF8',
+      9: 'F5F5F5',  // Descanso - grey
+      10: 'F5F5F5',
+      11: 'D5F5E3', // Neto - green
+      12: 'D5F5E3',
+    };
     for (let c = 0; c < rHeader.length; c++) {
       const cell = ws1[XLSX.utils.encode_cell({ r: 0, c })];
-      if (cell) cell.s = { bold: true, fill: { fgColor: { rgb: 'FFE0E0' } } };
+      if (cell) cell.s = { bold: true, fill: { fgColor: { rgb: headerColors[c] || 'FFEBEE' } } };
     }
 
     // Total row
     const totalRowIdx = rRows.length + 1;
     const totalBruto = Math.round(byOperator.reduce((s, o) => s + o.brutoMin, 0) * 10) / 10;
+    const totalTmInf = Math.round(byOperator.reduce((s, o) => s + o.tmInfMin, 0) * 10) / 10;
+    const totalBrutoAjust = Math.round(byOperator.reduce((s, o) => s + o.brutoAjustadoMin, 0) * 10) / 10;
     const totalNeto = Math.round(byOperator.reduce((s, o) => s + o.netoMin, 0) * 10) / 10;
     const totalBultos = byOperator.reduce((s, o) => s + o.bultos, 0);
     ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 0 })] = { t: 's', v: '' };
     ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 1 })] = { t: 's', v: 'TOTAL' };
-    ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 4 })] = { t: 'n', v: totalBruto };
-    ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 8 })] = { t: 'n', v: totalNeto };
-    ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 11 })] = { t: 'n', v: deadTimeEvents };
-    ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 14 })] = { t: 'n', v: totalBultos };
+    ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 4 })] = { t: 'n', v: totalTmInf };
+    ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 5 })] = { t: 'n', v: totalBruto };
+    ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 7 })] = { t: 'n', v: totalBrutoAjust };
+    ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 11 })] = { t: 'n', v: totalNeto };
+    ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 14 })] = { t: 'n', v: deadTimeEvents };
+    ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c: 17 })] = { t: 'n', v: totalBultos };
     for (let c = 0; c < rHeader.length; c++) {
       const cell = ws1[XLSX.utils.encode_cell({ r: totalRowIdx, c })];
       if (cell) cell.s = { bold: true, fill: { fgColor: { rgb: 'FFF3CD' } } };
@@ -186,7 +233,10 @@ export async function GET(request: NextRequest) {
       [''],
       ['Total Escaneos', scans.length],
       ['Total Eventos > 5 min', deadTimeEvents],
-      ['Tiempo Muerto Total', fmtSec(totalDeadTime), `${Math.round(totalDeadTime / 60)} min`],
+      ['Tiempo Muerto Bruto Total', fmtSec(totalDeadTime), `${Math.round(totalDeadTime / 60)} min`],
+      ['T. Muerto Informados Total', `${Math.round(totalTmInf)} min`],
+      ['T. Muerto Ajustado Total', `${Math.round(totalBrutoAjust)} min`],
+      ['T. Muerto Neto Total', `${Math.round(totalNeto)} min`],
       ['Promedio por Evento', fmtSec(avgGap)],
       ['Mayor Gap General', fmtSec(maxGap)],
       [''],
@@ -202,10 +252,10 @@ export async function GET(request: NextRequest) {
     ];
 
     const ws2 = XLSX.utils.aoa_to_sheet(summary);
-    ws2['!cols'] = [{ wch: 25 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+    ws2['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
 
     // Bold for title and section headers
-    [0, 8, 14].forEach(r => {
+    [0, 10, 16].forEach(r => {
       const cell = ws2[XLSX.utils.encode_cell({ r, c: 0 })];
       if (cell) cell.s = { bold: true, fill: { fgColor: { rgb: 'D4EDDA' } } };
     });

@@ -13,7 +13,7 @@ import {
   Upload, RefreshCw, Clock, BarChart3, AlertTriangle,
   Loader2, Database, Timer, ChevronLeft, ChevronRight,
   X, ArrowDown, Trophy, ArrowRight, User, Sun, Sunset, Moon,
-  PlayCircle, StopCircle, Download,
+  PlayCircle, StopCircle, Download, FileSpreadsheet,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -37,6 +37,7 @@ interface OpStat {
   nomUti: string;
   totalMin: number;
   totalMinSec: number;
+  tmInfMin: number;
   descansoMin: number;
   descansoMinSec: number;
   totalNetoMin: number;
@@ -141,6 +142,8 @@ export default function DashboardPage() {
   const [hasData, setHasData] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('ranking');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const tmInfInputRef = useRef<HTMLInputElement>(null);
+  const [tmInfUploading, setTmInfUploading] = useState(false);
   const { toast } = useToast();
 
   const fetchFilters = useCallback(async () => {
@@ -282,6 +285,26 @@ export default function DashboardPage() {
     }
   };
 
+  const handleTmInfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setTmInfUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/tm-informados', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast({ title: 'TM Informados cargados', description: `${data.totalRecords} registros de tiempos muertos informados` });
+      await fetchStats();
+    } catch (err) {
+      toast({ title: 'Error al cargar TM Informados', description: err instanceof Error ? err.message : 'Error desconocido', variant: 'destructive' });
+    } finally {
+      setTmInfUploading(false);
+      if (tmInfInputRef.current) tmInfInputRef.current.value = '';
+    }
+  };
+
   const selectedOpName = selectedOp !== 'all'
     ? (stats?.byOperator.find(o => o.codUti === selectedOp)?.nomUti ?? filters?.operators.find(o => o.codUti === selectedOp)?.nomUti ?? selectedOp)
     : null;
@@ -302,6 +325,11 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-2">
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleUpload} />
+            <input ref={tmInfInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleTmInfUpload} />
+            <Button variant="outline" size="sm" onClick={() => tmInfInputRef.current?.click()} disabled={tmInfUploading} title="Cargar Tiempos Muertos Informados">
+              {tmInfUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              <span className="hidden sm:inline ml-1">TM Inf.</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               <span className="hidden sm:inline ml-1">{uploading ? 'Cargando...' : 'Cargar Excel'}</span>
@@ -570,9 +598,11 @@ export default function DashboardPage() {
                           <TableHead className="text-xs w-12 text-center">#</TableHead>
                           <TableHead className="text-xs">Operador</TableHead>
                           <TableHead className="text-xs text-center">Turno</TableHead>
-                          <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
+                          <TableHead className="text-xs text-right">T. Muerto Inf.</TableHead>
+                          <TableHead className="text-xs text-right">T. Bruto Ajust.</TableHead>
                           <TableHead className="text-xs text-right">Descanso</TableHead>
                           <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
+                          <TableHead className="text-xs text-center">Dias</TableHead>
                           <TableHead className="text-xs text-right">Bultos</TableHead>
                           <TableHead className="text-xs text-right">Eventos</TableHead>
                           <TableHead className="text-xs text-right">Mayor Gap</TableHead>
@@ -597,6 +627,11 @@ export default function DashboardPage() {
                                 <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
                               </TableCell>
                               <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
+                              <TableCell className="text-right">
+                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
+                                  {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
+                                </span>
+                              </TableCell>
                               <TableCell className="text-xs text-right font-bold">
                                 <span className={isTop3 ? 'text-red-600' : op.totalMin > 100 ? 'text-orange-600' : ''}>
                                   {fmtDur(op.totalMinSec)}
@@ -610,6 +645,7 @@ export default function DashboardPage() {
                                   {fmtDur(op.totalNetoMinSec)}
                                 </span>
                               </TableCell>
+                              <TableCell className="text-xs text-center text-muted-foreground">{op.diasTrabajados}</TableCell>
                               <TableCell className="text-xs text-right font-medium">{op.totalBultos.toLocaleString('es-AR')}</TableCell>
                               <TableCell className="text-xs text-right">{op.events}</TableCell>
                               <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
