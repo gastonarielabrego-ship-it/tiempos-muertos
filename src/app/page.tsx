@@ -1206,12 +1206,29 @@ export default function DashboardPage() {
               const brutoMin = Math.round(stats.kpis.totalDeadTime / 60 * 10) / 10;
               const turnoLabel = selectedTurno !== 'all' ? selectedTurno : 'Todos';
               const fechaLabel = selectedDate !== 'all' ? selectedDate : 'Todas las fechas';
+              const minToH = (m: number) => {
+                const h = Math.floor(m / 60);
+                const mins = Math.round(m % 60 * 10) / 10;
+                return mins > 0 ? `${h}h ${mins}m` : `${h}h`;
+              };
+              // Chart: group indicadores by turno, show neto trend
+              const byTurnoChart: Record<string, any[]> = {};
+              for (const ind of indicadores) {
+                const t = ind.turno || 'todos';
+                if (!byTurnoChart[t]) byTurnoChart[t] = [];
+                byTurnoChart[t].push(ind);
+              }
+              // Sort each group by fecha
+              for (const t of Object.keys(byTurnoChart)) {
+                byTurnoChart[t].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+              }
+
               return (
                 <div className="space-y-4">
                   {/* Header with save */}
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h3 className="text-sm font-semibold">Indicadores Globales</h3>
+                      <h3 className="text-sm font-semibold">Indicadores</h3>
                       <p className="text-[10px] text-muted-foreground">Fecha: {fechaLabel} — Turno: {turnoLabel}</p>
                     </div>
                     <Button
@@ -1221,140 +1238,107 @@ export default function DashboardPage() {
                       className="h-8 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
                     >
                       {savingIndicador ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />}
-                      Guardar Indicador
+                      Guardar
                     </Button>
                   </div>
 
-                  {/* Desglose card — like the screenshot */}
-                  <Card>
-                    <CardContent className="p-4">
-                      <h4 className="text-xs font-semibold mb-3">Desglose</h4>
-                      <div className="grid grid-cols-4 gap-3 text-center">
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">Tiempo Bruto</p>
-                          <p className="text-base sm:text-lg font-bold text-red-600">{brutoMin.toFixed(1)} min</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">Descanso</p>
-                          <p className="text-base sm:text-lg font-bold text-slate-600">-{stats.kpis.totalDescansoMin.toFixed(1)} min</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">TM Informado</p>
-                          <p className="text-base sm:text-lg font-bold text-purple-600">-{stats.kpis.totalTmInfMin.toFixed(1)} min</p>
-                          <p className="text-[9px] text-purple-400">{stats.kpis.totalTmInfEventos} eventos</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">Tiempo Neto</p>
-                          <p className="text-base sm:text-lg font-bold text-green-700">{stats.kpis.totalNetoMin.toFixed(1)} min</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Bar chart — visual comparison */}
-                  <Card>
-                    <CardContent className="p-4">
-                      <h4 className="text-xs font-semibold mb-3">Comparativo (min)</h4>
-                      <div className="space-y-2">
-                        {[
-                          { label: 'Bruto', value: brutoMin, color: 'bg-red-500', textColor: 'text-red-600' },
-                          { label: 'Descanso', value: stats.kpis.totalDescansoMin, color: 'bg-slate-500', textColor: 'text-slate-600' },
-                          { label: 'TM Informado', value: stats.kpis.totalTmInfMin, color: 'bg-purple-500', textColor: 'text-purple-600' },
-                          { label: 'Neto', value: stats.kpis.totalNetoMin, color: 'bg-green-500', textColor: 'text-green-700' },
-                        ].map(item => {
-                          const maxVal = Math.max(brutoMin, 1);
-                          const pct = Math.min((item.value / maxVal) * 100, 100);
-                          return (
-                            <div key={item.label} className="flex items-center gap-3">
-                              <span className="text-[10px] w-20 text-right text-muted-foreground shrink-0">{item.label}</span>
-                              <div className="flex-1 h-6 bg-slate-100 rounded-sm overflow-hidden">
-                                <div className={`h-full ${item.color} rounded-sm transition-all`} style={{ width: `${pct}%` }} />
+                  {/* Gráfico: Tiempo Neto por Turno */}
+                  {indicadores.length >= 2 && Object.keys(byTurnoChart).length > 0 && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <h4 className="text-xs font-semibold mb-3">Indicador Tiempo Neto por Turno</h4>
+                        <div className="space-y-4">
+                          {Object.entries(byTurnoChart).map(([turno, items]) => {
+                            if (items.length < 2) return null;
+                            const maxVal = Math.max(...items.map((x: any) => x.netoMin || 0), 1);
+                            return (
+                              <div key={turno}>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                    turno === 'TM' ? 'bg-amber-100 text-amber-700' :
+                                    turno === 'TT' ? 'bg-orange-100 text-orange-700' :
+                                    turno === 'TN' ? 'bg-indigo-100 text-indigo-700' :
+                                    'bg-slate-100 text-slate-600'
+                                  }`}>{turno.toUpperCase()}</span>
+                                </div>
+                                <div className="flex items-end gap-1 h-24">
+                                  {items.map((ind: any, i: number) => {
+                                    const val = ind.netoMin || 0;
+                                    const prev = i > 0 ? (items[i - 1].netoMin || 0) : val;
+                                    const wentUp = val >= prev;
+                                    const barColor = wentUp ? 'bg-red-500' : 'bg-green-500';
+                                    const h = Math.max((val / maxVal) * 100, 3);
+                                    return (
+                                      <div key={ind.id} className="flex-1 flex flex-col items-center gap-0.5 group relative">
+                                        <div className={`w-full ${barColor} rounded-t-sm transition-all cursor-default`} style={{ height: `${h}%` }} />
+                                        <span className="text-[7px] text-muted-foreground leading-tight">{ind.fecha?.slice(5) || ''}</span>
+                                        {/* Tooltip */}
+                                        <div className="absolute bottom-full mb-1 hidden group-hover:block bg-slate-800 text-white text-[8px] rounded px-1.5 py-1 whitespace-nowrap z-10">
+                                          {ind.fecha}: {minToH(val)}
+                                          <span className={wentUp ? 'text-red-300' : 'text-green-300'}>
+                                            {wentUp ? ' ↑' : ' ↓'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                              <span className={`text-[10px] font-bold w-24 text-right ${item.textColor}`}>
-                                {item.value.toFixed(1)} min
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </CardContent>
-                  </Card>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
-                  {/* Historial de indicadores guardados */}
+                  {/* Tabla de indicadores */}
                   <Card>
                     <CardContent className="p-4">
-                      <h4 className="text-xs font-semibold mb-3">Historial Guardado</h4>
+                      <h4 className="text-xs font-semibold mb-3">Registro de Indicadores</h4>
                       {indicadoresLoading ? (
                         <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                       ) : indicadores.length === 0 ? (
-                        <p className="text-[10px] text-muted-foreground text-center py-6">No hay indicadores guardados. Presiona &quot;Guardar Indicador&quot; para registrar el estado actual.</p>
+                        <p className="text-[10px] text-muted-foreground text-center py-6">No hay indicadores guardados. Presiona &quot;Guardar&quot; para registrar el estado actual.</p>
                       ) : (
-                        <>
-                          {/* Mini chart for history */}
-                          {indicadores.length >= 2 && (
-                            <div className="mb-4 space-y-1.5">
-                              {['brutoMin', 'netoMin'].map(key => (
-                                <div key={key} className="flex items-center gap-2">
-                                  <span className="text-[9px] w-12 text-right text-muted-foreground shrink-0">{key === 'brutoMin' ? 'Bruto' : 'Neto'}</span>
-                                  <div className="flex items-end gap-0.5 flex-1 h-12">
-                                    {indicadores.slice(0, 12).reverse().map((ind: any, i: number) => {
-                                      const maxH = Math.max(...indicadores.slice(0, 12).map((x: any) => x[key] || 0), 1);
-                                      const h = Math.max(((ind[key] || 0) / maxH) * 100, 2);
-                                      const color = key === 'brutoMin' ? 'bg-red-400' : 'bg-green-400';
-                                      return (
-                                        <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-                                          <div className={`w-full ${color} rounded-t-sm`} style={{ height: `${h}%` }} />
-                                          <span className="text-[7px] text-muted-foreground leading-tight">{ind.fecha?.slice(5) || ''}</span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* History table */}
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-[10px]">
-                              <thead>
-                                <tr className="border-b">
-                                  <th className="text-left py-1 px-1 font-semibold">Fecha</th>
-                                  <th className="text-center py-1 px-1 font-semibold">Turno</th>
-                                  <th className="text-right py-1 px-1 font-semibold text-red-600">Bruto</th>
-                                  <th className="text-right py-1 px-1 font-semibold">Descanso</th>
-                                  <th className="text-right py-1 px-1 font-semibold text-purple-600">TM Inf</th>
-                                  <th className="text-right py-1 px-1 font-semibold text-green-700">Neto</th>
-                                  <th className="w-8"></th>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[10px]">
+                            <thead>
+                              <tr className="border-b">
+                                <th className="text-left py-1.5 px-2 font-semibold">Fecha</th>
+                                <th className="text-center py-1.5 px-2 font-semibold">Turno</th>
+                                <th className="text-right py-1.5 px-2 font-semibold text-red-600">Bruto</th>
+                                <th className="text-right py-1.5 px-2 font-semibold">Descanso</th>
+                                <th className="text-right py-1.5 px-2 font-semibold text-purple-600">TM Inf</th>
+                                <th className="text-right py-1.5 px-2 font-semibold text-green-700">Neto</th>
+                                <th className="w-8"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {indicadores.map((ind: any) => (
+                                <tr key={ind.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                  <td className="py-1.5 px-2">{ind.fecha}</td>
+                                  <td className="py-1.5 px-2 text-center">
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                                      ind.turno === 'TM' ? 'bg-amber-100 text-amber-700' :
+                                      ind.turno === 'TT' ? 'bg-orange-100 text-orange-700' :
+                                      ind.turno === 'TN' ? 'bg-indigo-100 text-indigo-700' :
+                                      'bg-slate-100 text-slate-600'
+                                    }`}>{ind.turno}</span>
+                                  </td>
+                                  <td className="py-1.5 px-2 text-right font-medium text-red-600">{minToH(ind.brutoMin || 0)}</td>
+                                  <td className="py-1.5 px-2 text-right">{minToH(ind.descansoMin || 0)}</td>
+                                  <td className="py-1.5 px-2 text-right text-purple-600">{minToH(ind.tmInfMin || 0)}</td>
+                                  <td className="py-1.5 px-2 text-right font-bold text-green-700">{minToH(ind.netoMin || 0)}</td>
+                                  <td className="py-1.5 px-2">
+                                    <button onClick={() => handleDeleteIndicador(ind.id)} className="text-slate-400 hover:text-red-500 transition-colors">
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  </td>
                                 </tr>
-                              </thead>
-                              <tbody>
-                                {indicadores.map((ind: any) => (
-                                  <tr key={ind.id} className="border-b border-slate-100 hover:bg-slate-50">
-                                    <td className="py-1.5 px-1">{ind.fecha}</td>
-                                    <td className="py-1.5 px-1 text-center">
-                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                                        ind.turno === 'TM' ? 'bg-amber-100 text-amber-700' :
-                                        ind.turno === 'TT' ? 'bg-orange-100 text-orange-700' :
-                                        ind.turno === 'TN' ? 'bg-indigo-100 text-indigo-700' :
-                                        'bg-slate-100 text-slate-600'
-                                      }`}>{ind.turno}</span>
-                                    </td>
-                                    <td className="py-1.5 px-1 text-right font-medium text-red-600">{ind.brutoMin?.toFixed(1)}</td>
-                                    <td className="py-1.5 px-1 text-right">-{ind.descansoMin?.toFixed(1)}</td>
-                                    <td className="py-1.5 px-1 text-right text-purple-600">-{ind.tmInfMin?.toFixed(1)}</td>
-                                    <td className="py-1.5 px-1 text-right font-bold text-green-700">{ind.netoMin?.toFixed(1)}</td>
-                                    <td className="py-1.5 px-1">
-                                      <button onClick={() => handleDeleteIndicador(ind.id)} className="text-slate-400 hover:text-red-500 transition-colors">
-                                        <Trash2 className="h-3 w-3" />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       )}
                     </CardContent>
                   </Card>
