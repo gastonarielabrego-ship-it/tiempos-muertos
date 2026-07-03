@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
         const tmInfEventos = tmInfEvMap[cod] || 0;
         // Descanso: only for TM and TT (NOT TN)
         const tieneDescanso = predTurno !== 'TN';
-        const descansoBruto = tieneDescanso ? d.dias.size * 60 : 0;
+        const descansoBruto = tieneDescanso ? d.dias.size * 35 : 0;
         const descansoReal = Math.min(descansoBruto, brutoMin);
         // Neto = Bruto - Descanso - TM Informados
         const netoMin = Math.max(0, Math.round((brutoMin - descansoReal - tmInfMin) * 10) / 10);
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
           cod, name: d.name,
           brutoMin, brutoSec: d.deadSec,
           tmInfMin, tmInfEventos,
-          descansoReal, descansoSec: descansoReal * 60,
+          descansoReal, descansoSec: Math.round(descansoReal * 60),
           netoMin, netoSec: Math.round(netoMin * 60),
           dias: d.dias.size, events: d.events, maxSec: d.maxSec,
           turno: predTurno, bultos: bultosMap.get(cod) || 0,

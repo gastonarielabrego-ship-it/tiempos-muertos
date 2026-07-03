@@ -82,8 +82,8 @@ export async function GET(request: NextRequest) {
         ultimoZona: last.zonSts,
         ultimoProducto: last.codPro,
         jornadaSec: horaToSec(last.hora) - horaToSec(first.hora),
-        descansoSec: 3600,
-        jornadaEfectivaSec: Math.max(0, horaToSec(last.hora) - horaToSec(first.hora) - 3600),
+        descansoSec: 2100,
+        jornadaEfectivaSec: Math.max(0, horaToSec(last.hora) - horaToSec(first.hora) - 2100),
       });
     }
 

@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
 
     const opName = allScans.length > 0 ? allScans[0].nomUti : operator;
     const brutoSec = totalDeadTimeSec;
-    const descansoSec = diasSet.size * 3600;
+    const descansoSec = diasSet.size * 2100;
     const descansoReal = Math.min(descansoSec, brutoSec);
     const netoSec = brutoSec - descansoReal;
     const maxGap = gaps.length > 0 ? gaps[0].gapSeconds : 0;
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
       ['Dias Trabajados', diasSet.size],
       ['Eventos (>5 min)', gaps.length],
       ['Tiempo Bruto', fmtHMS(brutoSec), `${Math.round(brutoSec / 60)} min`],
-      ['Descanso', `-${fmtHMS(descansoReal)}`, `-${Math.round(descansoReal / 60)} min`, `${diasSet.size} dias x 60 min`],
+      ['Descanso', `-${fmtHMS(descansoReal)}`, `-${Math.round(descansoReal / 60)} min`, `${diasSet.size} dias x 35 min`],
       ['Tiempo Neto', fmtHMS(netoSec), `${Math.round(netoSec / 60)} min`],
       ['Mayor Gap', fmtHMS(maxGap)],
     ];
