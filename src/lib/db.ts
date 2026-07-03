@@ -245,6 +245,19 @@ async function ensureTables() {
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await tursoQuery(`
+      CREATE TABLE IF NOT EXISTS "Indicador" (
+        "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        "fecha" TEXT NOT NULL,
+        "turno" TEXT NOT NULL DEFAULT 'todos',
+        "brutoMin" REAL NOT NULL DEFAULT 0,
+        "descansoMin" REAL NOT NULL DEFAULT 0,
+        "tmInfMin" REAL NOT NULL DEFAULT 0,
+        "tmInfEventos" INTEGER NOT NULL DEFAULT 0,
+        "netoMin" REAL NOT NULL DEFAULT 0,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
     console.log('[db] Turso tables ready');
   } catch (e) {
     console.error('[db] Auto-create table error:', e);

@@ -154,6 +154,9 @@ export default function DashboardPage() {
   const [sanciones, setSanciones] = useState<any[]>([]);
   const [sancionesCounts, setSancionesCounts] = useState<Record<string, { count: number; lastDate: string }>>({});
   const [sancionesLoading, setSancionesLoading] = useState(false);
+  const [indicadores, setIndicadores] = useState<any[]>([]);
+  const [indicadoresLoading, setIndicadoresLoading] = useState(false);
+  const [savingIndicador, setSavingIndicador] = useState(false);
   const { toast } = useToast();
 
   const fetchFilters = useCallback(async () => {
@@ -249,6 +252,58 @@ export default function DashboardPage() {
     finally { setSancionesLoading(false); }
   }, [selectedOp]);
 
+  const fetchIndicadores = useCallback(async () => {
+    setIndicadoresLoading(true);
+    try {
+      const res = await fetch('/api/indicadores');
+      const data = await res.json();
+      setIndicadores(data.indicadores || []);
+    } catch { /* silent */ }
+    finally { setIndicadoresLoading(false); }
+  }, []);
+
+  const handleSaveIndicador = async () => {
+    if (!stats) return;
+    setSavingIndicador(true);
+    try {
+      const brutoMin = Math.round(stats.kpis.totalDeadTime / 60 * 10) / 10;
+      const body = {
+        fecha: selectedDate !== 'all' ? selectedDate : new Date().toISOString().split('T')[0],
+        turno: selectedTurno !== 'all' ? selectedTurno : 'todos',
+        brutoMin,
+        descansoMin: stats.kpis.totalDescansoMin,
+        tmInfMin: stats.kpis.totalTmInfMin,
+        tmInfEventos: stats.kpis.totalTmInfEventos,
+        netoMin: stats.kpis.totalNetoMin,
+      };
+      const res = await fetch('/api/indicadores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        toast({ title: 'Indicador guardado' });
+        fetchIndicadores();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: 'Error', description: data.error || 'No se pudo guardar', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error al guardar indicador', variant: 'destructive' });
+    } finally {
+      setSavingIndicador(false);
+    }
+  };
+
+  const handleDeleteIndicador = async (id: number) => {
+    if (!confirm('Eliminar este registro de indicador?')) return;
+    try {
+      await fetch(`/api/indicadores?id=${id}`, { method: 'DELETE' });
+      toast({ title: 'Indicador eliminado' });
+      fetchIndicadores();
+    } catch { /* silent */ }
+  };
+
   const handleDeleteSancion = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Eliminar esta sancion?')) return;
@@ -272,6 +327,7 @@ export default function DashboardPage() {
     if (activeTab === 'operador' && selectedOp !== 'all') fetchGaps(1);
     if (activeTab === 'picks') fetchPicks(1);
     if (activeTab === 'sanciones') fetchSanciones();
+    if (activeTab === 'indicadores') fetchIndicadores();
   }, [selectedOp, selectedTurno, selectedDate, activeTab, hasData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpChange = (val: string) => {
@@ -1146,87 +1202,165 @@ export default function DashboardPage() {
         )}
 
             {/* ===================== INDICADORES TAB ===================== */}
-            {activeTab === 'indicadores' && stats && !loading && (
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold">Indicadores Globales</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* Descanso Total */}
-                  <Card className="border-slate-200 bg-slate-50/60">
-                    <CardContent className="p-5 flex flex-col items-center text-center">
-                      <div className="rounded-lg bg-slate-500 p-2 mb-3">
-                        <Coffee className="h-5 w-5 text-white" />
-                      </div>
-                      <p className="text-xs text-muted-foreground font-medium">Total Descanso</p>
-                      <p className="text-2xl sm:text-3xl font-bold text-slate-700 my-1">
-                        {Math.floor(stats.kpis.totalDescansoMin / 60)}h {Math.round(stats.kpis.totalDescansoMin % 60)}m
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {stats.kpis.totalDescansoMin.toFixed(1)} minutos totales
-                      </p>
-                    </CardContent>
-                  </Card>
+            {activeTab === 'indicadores' && stats && !loading && (() => {
+              const brutoMin = Math.round(stats.kpis.totalDeadTime / 60 * 10) / 10;
+              const turnoLabel = selectedTurno !== 'all' ? selectedTurno : 'Todos';
+              const fechaLabel = selectedDate !== 'all' ? selectedDate : 'Todas las fechas';
+              return (
+                <div className="space-y-4">
+                  {/* Header with save */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-semibold">Indicadores Globales</h3>
+                      <p className="text-[10px] text-muted-foreground">Fecha: {fechaLabel} — Turno: {turnoLabel}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveIndicador}
+                      disabled={savingIndicador}
+                      className="h-8 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      {savingIndicador ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />}
+                      Guardar Indicador
+                    </Button>
+                  </div>
 
-                  {/* TM Informado Total */}
-                  <Card className="border-purple-200 bg-purple-50/60">
-                    <CardContent className="p-5 flex flex-col items-center text-center">
-                      <div className="rounded-lg bg-purple-500 p-2 mb-3">
-                        <FileText className="h-5 w-5 text-white" />
-                      </div>
-                      <p className="text-xs text-purple-600 font-medium">Total TM Informado</p>
-                      <p className="text-2xl sm:text-3xl font-bold text-purple-700 my-1">
-                        {Math.floor(stats.kpis.totalTmInfMin / 60)}h {Math.round(stats.kpis.totalTmInfMin % 60)}m
-                      </p>
-                      <p className="text-[10px] text-purple-500">
-                        {stats.kpis.totalTmInfEventos} eventos informados
-                      </p>
-                    </CardContent>
-                  </Card>
-
-                  {/* Tiempo Neto Total */}
-                  <Card className="border-green-200 bg-green-50/60">
-                    <CardContent className="p-5 flex flex-col items-center text-center">
-                      <div className="rounded-lg bg-green-600 p-2 mb-3">
-                        <TrendingDown className="h-5 w-5 text-white" />
-                      </div>
-                      <p className="text-xs text-green-700 font-medium">Total Tiempo Neto</p>
-                      <p className="text-2xl sm:text-3xl font-bold text-green-700 my-1">
-                        {Math.floor(stats.kpis.totalNetoMin / 60)}h {Math.round(stats.kpis.totalNetoMin % 60)}m
-                      </p>
-                      <p className="text-[10px] text-green-500">
-                        Bruto - Descanso - TM Informado
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Resumen complementario */}
-                {stats && (
+                  {/* Desglose card — like the screenshot */}
                   <Card>
                     <CardContent className="p-4">
                       <h4 className="text-xs font-semibold mb-3">Desglose</h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                      <div className="grid grid-cols-4 gap-3 text-center">
                         <div>
-                          <span className="text-[10px] text-muted-foreground block">Tiempo Bruto</span>
-                          <span className="font-bold text-red-600">{Math.floor(stats.kpis.totalDeadTime / 3600)}h {Math.floor((stats.kpis.totalDeadTime % 3600) / 60)}m {stats.kpis.totalDeadTime % 60}s</span>
+                          <p className="text-[10px] text-muted-foreground">Tiempo Bruto</p>
+                          <p className="text-base sm:text-lg font-bold text-red-600">{brutoMin.toFixed(1)} min</p>
                         </div>
                         <div>
-                          <span className="text-[10px] text-muted-foreground block">Descanso</span>
-                          <span className="font-bold text-slate-600">-{stats.kpis.totalDescansoMin.toFixed(1)} min</span>
+                          <p className="text-[10px] text-muted-foreground">Descanso</p>
+                          <p className="text-base sm:text-lg font-bold text-slate-600">-{stats.kpis.totalDescansoMin.toFixed(1)} min</p>
                         </div>
                         <div>
-                          <span className="text-[10px] text-muted-foreground block">TM Informado</span>
-                          <span className="font-bold text-purple-600">-{stats.kpis.totalTmInfMin.toFixed(1)} min</span>
+                          <p className="text-[10px] text-muted-foreground">TM Informado</p>
+                          <p className="text-base sm:text-lg font-bold text-purple-600">-{stats.kpis.totalTmInfMin.toFixed(1)} min</p>
+                          <p className="text-[9px] text-purple-400">{stats.kpis.totalTmInfEventos} eventos</p>
                         </div>
                         <div>
-                          <span className="text-[10px] text-muted-foreground block">Tiempo Neto</span>
-                          <span className="font-bold text-green-700">{stats.kpis.totalNetoMin.toFixed(1)} min</span>
+                          <p className="text-[10px] text-muted-foreground">Tiempo Neto</p>
+                          <p className="text-base sm:text-lg font-bold text-green-700">{stats.kpis.totalNetoMin.toFixed(1)} min</p>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
-                )}
-              </div>
-            )}
+
+                  {/* Bar chart — visual comparison */}
+                  <Card>
+                    <CardContent className="p-4">
+                      <h4 className="text-xs font-semibold mb-3">Comparativo (min)</h4>
+                      <div className="space-y-2">
+                        {[
+                          { label: 'Bruto', value: brutoMin, color: 'bg-red-500', textColor: 'text-red-600' },
+                          { label: 'Descanso', value: stats.kpis.totalDescansoMin, color: 'bg-slate-500', textColor: 'text-slate-600' },
+                          { label: 'TM Informado', value: stats.kpis.totalTmInfMin, color: 'bg-purple-500', textColor: 'text-purple-600' },
+                          { label: 'Neto', value: stats.kpis.totalNetoMin, color: 'bg-green-500', textColor: 'text-green-700' },
+                        ].map(item => {
+                          const maxVal = Math.max(brutoMin, 1);
+                          const pct = Math.min((item.value / maxVal) * 100, 100);
+                          return (
+                            <div key={item.label} className="flex items-center gap-3">
+                              <span className="text-[10px] w-20 text-right text-muted-foreground shrink-0">{item.label}</span>
+                              <div className="flex-1 h-6 bg-slate-100 rounded-sm overflow-hidden">
+                                <div className={`h-full ${item.color} rounded-sm transition-all`} style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className={`text-[10px] font-bold w-24 text-right ${item.textColor}`}>
+                                {item.value.toFixed(1)} min
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Historial de indicadores guardados */}
+                  <Card>
+                    <CardContent className="p-4">
+                      <h4 className="text-xs font-semibold mb-3">Historial Guardado</h4>
+                      {indicadoresLoading ? (
+                        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                      ) : indicadores.length === 0 ? (
+                        <p className="text-[10px] text-muted-foreground text-center py-6">No hay indicadores guardados. Presiona &quot;Guardar Indicador&quot; para registrar el estado actual.</p>
+                      ) : (
+                        <>
+                          {/* Mini chart for history */}
+                          {indicadores.length >= 2 && (
+                            <div className="mb-4 space-y-1.5">
+                              {['brutoMin', 'netoMin'].map(key => (
+                                <div key={key} className="flex items-center gap-2">
+                                  <span className="text-[9px] w-12 text-right text-muted-foreground shrink-0">{key === 'brutoMin' ? 'Bruto' : 'Neto'}</span>
+                                  <div className="flex items-end gap-0.5 flex-1 h-12">
+                                    {indicadores.slice(0, 12).reverse().map((ind: any, i: number) => {
+                                      const maxH = Math.max(...indicadores.slice(0, 12).map((x: any) => x[key] || 0), 1);
+                                      const h = Math.max(((ind[key] || 0) / maxH) * 100, 2);
+                                      const color = key === 'brutoMin' ? 'bg-red-400' : 'bg-green-400';
+                                      return (
+                                        <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                                          <div className={`w-full ${color} rounded-t-sm`} style={{ height: `${h}%` }} />
+                                          <span className="text-[7px] text-muted-foreground leading-tight">{ind.fecha?.slice(5) || ''}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* History table */}
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-[10px]">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left py-1 px-1 font-semibold">Fecha</th>
+                                  <th className="text-center py-1 px-1 font-semibold">Turno</th>
+                                  <th className="text-right py-1 px-1 font-semibold text-red-600">Bruto</th>
+                                  <th className="text-right py-1 px-1 font-semibold">Descanso</th>
+                                  <th className="text-right py-1 px-1 font-semibold text-purple-600">TM Inf</th>
+                                  <th className="text-right py-1 px-1 font-semibold text-green-700">Neto</th>
+                                  <th className="w-8"></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {indicadores.map((ind: any) => (
+                                  <tr key={ind.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                    <td className="py-1.5 px-1">{ind.fecha}</td>
+                                    <td className="py-1.5 px-1 text-center">
+                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                                        ind.turno === 'TM' ? 'bg-amber-100 text-amber-700' :
+                                        ind.turno === 'TT' ? 'bg-orange-100 text-orange-700' :
+                                        ind.turno === 'TN' ? 'bg-indigo-100 text-indigo-700' :
+                                        'bg-slate-100 text-slate-600'
+                                      }`}>{ind.turno}</span>
+                                    </td>
+                                    <td className="py-1.5 px-1 text-right font-medium text-red-600">{ind.brutoMin?.toFixed(1)}</td>
+                                    <td className="py-1.5 px-1 text-right">-{ind.descansoMin?.toFixed(1)}</td>
+                                    <td className="py-1.5 px-1 text-right text-purple-600">-{ind.tmInfMin?.toFixed(1)}</td>
+                                    <td className="py-1.5 px-1 text-right font-bold text-green-700">{ind.netoMin?.toFixed(1)}</td>
+                                    <td className="py-1.5 px-1">
+                                      <button onClick={() => handleDeleteIndicador(ind.id)} className="text-slate-400 hover:text-red-500 transition-colors">
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })()}
       </main>
 
       <footer className="mt-auto border-t bg-white/60">
