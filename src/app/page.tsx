@@ -29,6 +29,7 @@ interface KPIs {
   totalTmInfMin: number;
   totalTmInfEventos: number;
   totalNetoMin: number;
+  totalBultos: number;
 }
 
 interface ShiftData {
@@ -275,6 +276,7 @@ export default function DashboardPage() {
         tmInfMin: stats.kpis.totalTmInfMin,
         tmInfEventos: stats.kpis.totalTmInfEventos,
         netoMin: stats.kpis.totalNetoMin,
+        totalBultos: stats.kpis.totalBultos || 0,
       };
       const res = await fetch('/api/indicadores', {
         method: 'POST',
@@ -1316,6 +1318,7 @@ export default function DashboardPage() {
                                 <th className="text-right py-1.5 px-2 font-semibold">Descanso</th>
                                 <th className="text-right py-1.5 px-2 font-semibold text-purple-600">TM Inf</th>
                                 <th className="text-right py-1.5 px-2 font-semibold text-green-700">Neto</th>
+                                <th className="text-right py-1.5 px-2 font-semibold text-slate-600">Bultos</th>
                                 <th className="w-8"></th>
                               </tr>
                             </thead>
@@ -1336,6 +1339,7 @@ export default function DashboardPage() {
                                   <td className="py-1.5 px-2 text-right">{minToH(ind.descansoMin || 0)}</td>
                                   <td className="py-1.5 px-2 text-right text-purple-600">{minToH(ind.tmInfMin || 0)}</td>
                                   <td className="py-1.5 px-2 text-right font-bold text-green-700">{minToH(ind.netoMin || 0)}</td>
+                                  <td className="py-1.5 px-2 text-right text-slate-600">{ind.totalBultos?.toLocaleString() || '0'}</td>
                                   <td className="py-1.5 px-2">
                                     <button onClick={() => handleDeleteIndicador(ind.id)} className="text-slate-400 hover:text-red-500 transition-colors">
                                       <Trash2 className="h-3 w-3" />

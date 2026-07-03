@@ -255,9 +255,14 @@ async function ensureTables() {
         "tmInfMin" REAL NOT NULL DEFAULT 0,
         "tmInfEventos" INTEGER NOT NULL DEFAULT 0,
         "netoMin" REAL NOT NULL DEFAULT 0,
+        "totalBultos" INTEGER NOT NULL DEFAULT 0,
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    // Add totalBultos column if missing (for existing tables)
+    try {
+      await tursoQuery(`ALTER TABLE "Indicador" ADD COLUMN "totalBultos" INTEGER NOT NULL DEFAULT 0`);
+    } catch { /* column already exists */ }
     console.log('[db] Turso tables ready');
   } catch (e) {
     console.error('[db] Auto-create table error:', e);

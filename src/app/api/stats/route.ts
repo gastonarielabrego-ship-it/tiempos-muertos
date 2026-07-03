@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     if (scans.length === 0) {
       return NextResponse.json({
-        kpis: { totalScans: 0, totalDeadTime: 0, deadTimeEvents: 0, avgGap: 0, maxGap: 0, totalDescansoMin: 0, totalTmInfMin: 0, totalTmInfEventos: 0, totalNetoMin: 0 },
+        kpis: { totalScans: 0, totalDeadTime: 0, deadTimeEvents: 0, avgGap: 0, maxGap: 0, totalDescansoMin: 0, totalTmInfMin: 0, totalTmInfEventos: 0, totalNetoMin: 0, totalBultos: 0 },
         byShift: { TM: { sec: 0, events: 0 }, TT: { sec: 0, events: 0 }, TN: { sec: 0, events: 0 } },
         byOperator: [],
       });
@@ -172,6 +172,7 @@ export async function GET(request: NextRequest) {
         totalTmInfMin: Math.round(byOperator.reduce((s, o) => s + o.tmInfMin, 0) * 10) / 10,
         totalTmInfEventos: byOperator.reduce((s, o) => s + o.tmInfEventos, 0),
         totalNetoMin: Math.round(byOperator.reduce((s, o) => s + o.totalNetoMin, 0) * 10) / 10,
+        totalBultos: scans.reduce((s, sc) => s + sc.bultos, 0),
       },
       byShift: shiftData,
       byOperator,
