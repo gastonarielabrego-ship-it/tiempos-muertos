@@ -14,7 +14,7 @@ import {
   Loader2, Database, Timer, ChevronLeft, ChevronRight,
   X, ArrowDown, Trophy, ArrowRight, User, Sun, Sunset, Moon,
   PlayCircle, StopCircle, Download, FileSpreadsheet, Shield,
-  Trash2,
+  Trash2, Coffee, FileText, TrendingDown,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -25,6 +25,10 @@ interface KPIs {
   deadTimeEvents: number;
   avgGap: number;
   maxGap: number;
+  totalDescansoMin: number;
+  totalTmInfMin: number;
+  totalTmInfEventos: number;
+  totalNetoMin: number;
 }
 
 interface ShiftData {
@@ -117,7 +121,7 @@ function TurnoBadge({ turno }: { turno: string }) {
   );
 }
 
-type TabType = 'ranking' | 'operador' | 'picks' | 'sanciones';
+type TabType = 'ranking' | 'operador' | 'picks' | 'sanciones' | 'indicadores';
 
 // --- Main Page ---
 export default function DashboardPage() {
@@ -636,6 +640,15 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </button>
+                <button
+                  onClick={() => setActiveTab('indicadores')}
+                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+                    activeTab === 'indicadores' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <BarChart3 className="h-3 w-3 inline mr-1" />
+                  Indicadores
+                </button>
               </div>
             )}
 
@@ -1131,6 +1144,89 @@ export default function DashboardPage() {
             )}
           </>
         )}
+
+            {/* ===================== INDICADORES TAB ===================== */}
+            {activeTab === 'indicadores' && stats && !loading && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold">Indicadores Globales</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Descanso Total */}
+                  <Card className="border-slate-200 bg-slate-50/60">
+                    <CardContent className="p-5 flex flex-col items-center text-center">
+                      <div className="rounded-lg bg-slate-500 p-2 mb-3">
+                        <Coffee className="h-5 w-5 text-white" />
+                      </div>
+                      <p className="text-xs text-muted-foreground font-medium">Total Descanso</p>
+                      <p className="text-2xl sm:text-3xl font-bold text-slate-700 my-1">
+                        {Math.floor(stats.kpis.totalDescansoMin / 60)}h {Math.round(stats.kpis.totalDescansoMin % 60)}m
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {stats.kpis.totalDescansoMin.toFixed(1)} minutos totales
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* TM Informado Total */}
+                  <Card className="border-purple-200 bg-purple-50/60">
+                    <CardContent className="p-5 flex flex-col items-center text-center">
+                      <div className="rounded-lg bg-purple-500 p-2 mb-3">
+                        <FileText className="h-5 w-5 text-white" />
+                      </div>
+                      <p className="text-xs text-purple-600 font-medium">Total TM Informado</p>
+                      <p className="text-2xl sm:text-3xl font-bold text-purple-700 my-1">
+                        {Math.floor(stats.kpis.totalTmInfMin / 60)}h {Math.round(stats.kpis.totalTmInfMin % 60)}m
+                      </p>
+                      <p className="text-[10px] text-purple-500">
+                        {stats.kpis.totalTmInfEventos} eventos informados
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Tiempo Neto Total */}
+                  <Card className="border-green-200 bg-green-50/60">
+                    <CardContent className="p-5 flex flex-col items-center text-center">
+                      <div className="rounded-lg bg-green-600 p-2 mb-3">
+                        <TrendingDown className="h-5 w-5 text-white" />
+                      </div>
+                      <p className="text-xs text-green-700 font-medium">Total Tiempo Neto</p>
+                      <p className="text-2xl sm:text-3xl font-bold text-green-700 my-1">
+                        {Math.floor(stats.kpis.totalNetoMin / 60)}h {Math.round(stats.kpis.totalNetoMin % 60)}m
+                      </p>
+                      <p className="text-[10px] text-green-500">
+                        Bruto - Descanso - TM Informado
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Resumen complementario */}
+                {stats && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <h4 className="text-xs font-semibold mb-3">Desglose</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">Tiempo Bruto</span>
+                          <span className="font-bold text-red-600">{Math.floor(stats.kpis.totalDeadTime / 3600)}h {Math.floor((stats.kpis.totalDeadTime % 3600) / 60)}m {stats.kpis.totalDeadTime % 60}s</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">Descanso</span>
+                          <span className="font-bold text-slate-600">-{stats.kpis.totalDescansoMin.toFixed(1)} min</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">TM Informado</span>
+                          <span className="font-bold text-purple-600">-{stats.kpis.totalTmInfMin.toFixed(1)} min</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">Tiempo Neto</span>
+                          <span className="font-bold text-green-700">{stats.kpis.totalNetoMin.toFixed(1)} min</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
       </main>
 
       <footer className="mt-auto border-t bg-white/60">
