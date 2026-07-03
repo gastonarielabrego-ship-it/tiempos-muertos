@@ -1218,6 +1218,11 @@ export default function DashboardPage() {
                 const horas = brutoMin / 60;
                 return (horas / 8.35).toFixed(2);
               };
+              const produccion = (bultos: number, netoMin: number) => {
+                const horas = netoMin / 60;
+                if (horas <= 0) return '0.00';
+                return (bultos / horas).toFixed(2);
+              };
               // Chart: group indicadores by turno, show neto trend
               const byTurnoChart: Record<string, any[]> = {};
               for (const ind of indicadores) {
@@ -1319,6 +1324,7 @@ export default function DashboardPage() {
                                 <th className="text-right py-1.5 px-2 font-semibold text-purple-600">TM Inf</th>
                                 <th className="text-right py-1.5 px-2 font-semibold text-green-700">Neto</th>
                                 <th className="text-right py-1.5 px-2 font-semibold text-slate-600">Bultos</th>
+                                <th className="text-right py-1.5 px-2 font-semibold text-emerald-600">Producción</th>
                                 <th className="w-8"></th>
                               </tr>
                             </thead>
@@ -1340,6 +1346,7 @@ export default function DashboardPage() {
                                   <td className="py-1.5 px-2 text-right text-purple-600">{minToH(ind.tmInfMin || 0)}</td>
                                   <td className="py-1.5 px-2 text-right font-bold text-green-700">{minToH(ind.netoMin || 0)}</td>
                                   <td className="py-1.5 px-2 text-right text-slate-600">{ind.totalBultos?.toLocaleString() || '0'}</td>
+                                  <td className="py-1.5 px-2 text-right font-medium text-emerald-600">{produccion(ind.totalBultos || 0, ind.netoMin || 0)}</td>
                                   <td className="py-1.5 px-2">
                                     <button onClick={() => handleDeleteIndicador(ind.id)} className="text-slate-400 hover:text-red-500 transition-colors">
                                       <Trash2 className="h-3 w-3" />
