@@ -30,6 +30,8 @@ interface KPIs {
   totalTmInfEventos: number;
   totalNetoMin: number;
   totalBultos: number;
+  totalPreparacionMin: number;
+  totalColaboradores: number;
 }
 
 interface ShiftData {
@@ -277,6 +279,8 @@ export default function DashboardPage() {
         tmInfEventos: stats.kpis.totalTmInfEventos,
         netoMin: stats.kpis.totalNetoMin,
         totalBultos: stats.kpis.totalBultos || 0,
+        totalPreparacionMin: stats.kpis.totalPreparacionMin || 0,
+        totalColaboradores: stats.kpis.totalColaboradores || 0,
       };
       const res = await fetch('/api/indicadores', {
         method: 'POST',
@@ -1218,8 +1222,8 @@ export default function DashboardPage() {
                 const horas = brutoMin / 60;
                 return (horas / 8.35).toFixed(2);
               };
-              const produccion = (bultos: number, netoMin: number) => {
-                const horas = netoMin / 60;
+              const bultosPorHora = (bultos: number, prepMin: number) => {
+                const horas = prepMin / 60;
                 if (horas <= 0) return '0.00';
                 return (bultos / horas).toFixed(2);
               };
@@ -1316,23 +1320,25 @@ export default function DashboardPage() {
                           <table className="w-full text-[10px]">
                             <thead>
                               <tr className="border-b">
-                                <th className="text-left py-1.5 px-2 font-semibold">Fecha</th>
-                                <th className="text-center py-1.5 px-2 font-semibold">Turno</th>
-                                <th className="text-right py-1.5 px-2 font-semibold text-red-600">Bruto</th>
-                                <th className="text-right py-1.5 px-2 font-semibold text-blue-600">Cap. Equiv.</th>
-                                <th className="text-right py-1.5 px-2 font-semibold">Descanso</th>
-                                <th className="text-right py-1.5 px-2 font-semibold text-purple-600">TM Inf</th>
-                                <th className="text-right py-1.5 px-2 font-semibold text-green-700">Neto</th>
-                                <th className="text-right py-1.5 px-2 font-semibold text-slate-600">Bultos</th>
-                                <th className="text-right py-1.5 px-2 font-semibold text-emerald-600">Producción</th>
+                                <th className="text-left py-1.5 px-1.5 font-semibold">Fecha</th>
+                                <th className="text-center py-1.5 px-1.5 font-semibold">Turno</th>
+                                <th className="text-right py-1.5 px-1.5 font-semibold text-cyan-700">T. Preparación</th>
+                                <th className="text-center py-1.5 px-1.5 font-semibold text-slate-600">Colab.</th>
+                                <th className="text-right py-1.5 px-1.5 font-semibold text-slate-600">Bultos</th>
+                                <th className="text-right py-1.5 px-1.5 font-semibold text-red-600">TM Bruto</th>
+                                <th className="text-right py-1.5 px-1.5 font-semibold">Descanso</th>
+                                <th className="text-right py-1.5 px-1.5 font-semibold text-purple-600">TM Inf</th>
+                                <th className="text-right py-1.5 px-1.5 font-semibold text-green-700">TM Neto</th>
+                                <th className="text-right py-1.5 px-1.5 font-semibold text-blue-600">Cap. Equiv.</th>
+                                <th className="text-right py-1.5 px-1.5 font-semibold text-emerald-600">Bultos/h</th>
                                 <th className="w-8"></th>
                               </tr>
                             </thead>
                             <tbody>
                               {indicadores.map((ind: any) => (
                                 <tr key={ind.id} className="border-b border-slate-100 hover:bg-slate-50">
-                                  <td className="py-1.5 px-2">{ind.fecha}</td>
-                                  <td className="py-1.5 px-2 text-center">
+                                  <td className="py-1.5 px-1.5">{ind.fecha}</td>
+                                  <td className="py-1.5 px-1.5 text-center">
                                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
                                       ind.turno === 'TM' ? 'bg-amber-100 text-amber-700' :
                                       ind.turno === 'TT' ? 'bg-orange-100 text-orange-700' :
@@ -1340,14 +1346,16 @@ export default function DashboardPage() {
                                       'bg-slate-100 text-slate-600'
                                     }`}>{ind.turno}</span>
                                   </td>
-                                  <td className="py-1.5 px-2 text-right font-medium text-red-600">{minToH(ind.brutoMin || 0)}</td>
-                                  <td className="py-1.5 px-2 text-right font-medium text-blue-600">{capEquiv(ind.brutoMin || 0)}</td>
-                                  <td className="py-1.5 px-2 text-right">{minToH(ind.descansoMin || 0)}</td>
-                                  <td className="py-1.5 px-2 text-right text-purple-600">{minToH(ind.tmInfMin || 0)}</td>
-                                  <td className="py-1.5 px-2 text-right font-bold text-green-700">{minToH(ind.netoMin || 0)}</td>
-                                  <td className="py-1.5 px-2 text-right text-slate-600">{ind.totalBultos?.toLocaleString() || '0'}</td>
-                                  <td className="py-1.5 px-2 text-right font-medium text-emerald-600">{produccion(ind.totalBultos || 0, ind.netoMin || 0)}</td>
-                                  <td className="py-1.5 px-2">
+                                  <td className="py-1.5 px-1.5 text-right font-medium text-cyan-700">{minToH(ind.totalPreparacionMin || 0)}</td>
+                                  <td className="py-1.5 px-1.5 text-center text-slate-600">{ind.totalColaboradores || 0}</td>
+                                  <td className="py-1.5 px-1.5 text-right text-slate-600">{ind.totalBultos?.toLocaleString() || '0'}</td>
+                                  <td className="py-1.5 px-1.5 text-right font-medium text-red-600">{minToH(ind.brutoMin || 0)}</td>
+                                  <td className="py-1.5 px-1.5 text-right">{minToH(ind.descansoMin || 0)}</td>
+                                  <td className="py-1.5 px-1.5 text-right text-purple-600">{minToH(ind.tmInfMin || 0)}</td>
+                                  <td className="py-1.5 px-1.5 text-right font-bold text-green-700">{minToH(ind.netoMin || 0)}</td>
+                                  <td className="py-1.5 px-1.5 text-right font-medium text-blue-600">{capEquiv(ind.brutoMin || 0)}</td>
+                                  <td className="py-1.5 px-1.5 text-right font-medium text-emerald-600">{bultosPorHora(ind.totalBultos || 0, ind.totalPreparacionMin || 0)}</td>
+                                  <td className="py-1.5 px-1.5">
                                     <button onClick={() => handleDeleteIndicador(ind.id)} className="text-slate-400 hover:text-red-500 transition-colors">
                                       <Trash2 className="h-3 w-3" />
                                     </button>

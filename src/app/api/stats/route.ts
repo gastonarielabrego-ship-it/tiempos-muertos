@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     if (scans.length === 0) {
       return NextResponse.json({
-        kpis: { totalScans: 0, totalDeadTime: 0, deadTimeEvents: 0, avgGap: 0, maxGap: 0, totalDescansoMin: 0, totalTmInfMin: 0, totalTmInfEventos: 0, totalNetoMin: 0, totalBultos: 0 },
+        kpis: { totalScans: 0, totalDeadTime: 0, deadTimeEvents: 0, avgGap: 0, maxGap: 0, totalDescansoMin: 0, totalTmInfMin: 0, totalTmInfEventos: 0, totalNetoMin: 0, totalBultos: 0, totalPreparacionMin: 0, totalColaboradores: 0 },
         byShift: { TM: { sec: 0, events: 0 }, TT: { sec: 0, events: 0 }, TN: { sec: 0, events: 0 } },
         byOperator: [],
       });
@@ -62,6 +62,27 @@ export async function GET(request: NextRequest) {
     for (const s of scans) {
       bultosMap.set(s.codUti, (bultosMap.get(s.codUti) || 0) + s.bultos);
     }
+
+    // Calculate total preparation time (jornada efectiva) and unique collaborators
+    const uniqueOperators = new Map<string, string>();
+    let totalPreparacionSec = 0;
+    for (const [, dayScans] of grouped) {
+      if (dayScans.length < 2) continue;
+      const first = dayScans[0];
+      const last = dayScans[dayScans.length - 1];
+      const fP = first.hora.split(':').map(Number);
+      const lP = last.hora.split(':').map(Number);
+      const jornadaSec = (lP[0] * 3600 + lP[1] * 60 + lP[2]) - (fP[0] * 3600 + fP[1] * 60 + fP[2]);
+      // Determine turno for descanso logic
+      const turno = getTurno(first.hora);
+      const tieneDescanso = turno !== 'TN';
+      const descansoSec = tieneDescanso ? 2100 : 0; // 35 min
+      const jornadaEfectiva = Math.max(0, jornadaSec - descansoSec);
+      totalPreparacionSec += jornadaEfectiva;
+      uniqueOperators.set(first.codUti, first.nomUti);
+    }
+    const totalPreparacionMin = Math.round((totalPreparacionSec / 60) * 10) / 10;
+    const totalColaboradores = uniqueOperators.size;
 
     const opMap = new Map<string, {
       name: string; deadSec: number; events: number; maxSec: number;
@@ -173,6 +194,8 @@ export async function GET(request: NextRequest) {
         totalTmInfEventos: byOperator.reduce((s, o) => s + o.tmInfEventos, 0),
         totalNetoMin: Math.round(byOperator.reduce((s, o) => s + o.totalNetoMin, 0) * 10) / 10,
         totalBultos: scans.reduce((s, sc) => s + sc.bultos, 0),
+        totalPreparacionMin,
+        totalColaboradores,
       },
       byShift: shiftData,
       byOperator,

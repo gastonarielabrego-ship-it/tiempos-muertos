@@ -18,6 +18,8 @@ export async function GET() {
       tmInfEventos: Number(r.tmInfEventos),
       netoMin: Number(r.netoMin),
       totalBultos: r.totalBultos !== undefined && r.totalBultos !== null ? Number(r.totalBultos) : 0,
+      totalPreparacionMin: r.totalPreparacionMin !== undefined && r.totalPreparacionMin !== null ? Number(r.totalPreparacionMin) : 0,
+      totalColaboradores: r.totalColaboradores !== undefined && r.totalColaboradores !== null ? Number(r.totalColaboradores) : 0,
       createdAt: String(r.createdAt),
     }));
     return NextResponse.json({ indicadores });
@@ -34,13 +36,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Solo disponible en producción (Turso)' }, { status: 400 });
     }
     const body = await request.json();
-    const { fecha, turno, brutoMin, descansoMin, tmInfMin, tmInfEventos, netoMin, totalBultos } = body;
+    const { fecha, turno, brutoMin, descansoMin, tmInfMin, tmInfEventos, netoMin, totalBultos, totalPreparacionMin, totalColaboradores } = body;
     if (!fecha) {
       return NextResponse.json({ error: 'fecha es requerida' }, { status: 400 });
     }
     await tursoQuery(
-      `INSERT INTO "Indicador" ("fecha","turno","brutoMin","descansoMin","tmInfMin","tmInfEventos","netoMin","totalBultos")
-       VALUES (?,?,?,?,?,?,?,?)`,
+      `INSERT INTO "Indicador" ("fecha","turno","brutoMin","descansoMin","tmInfMin","tmInfEventos","netoMin","totalBultos","totalPreparacionMin","totalColaboradores")
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
       [
         String(fecha),
         String(turno || 'todos'),
@@ -50,6 +52,8 @@ export async function POST(request: NextRequest) {
         Number(tmInfEventos) || 0,
         Number(netoMin) || 0,
         Number(totalBultos) || 0,
+        Number(totalPreparacionMin) || 0,
+        Number(totalColaboradores) || 0,
       ]
     );
     return NextResponse.json({ success: true });
