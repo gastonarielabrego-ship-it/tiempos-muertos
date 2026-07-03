@@ -1211,6 +1211,11 @@ export default function DashboardPage() {
                 const mins = Math.round(m % 60 * 10) / 10;
                 return mins > 0 ? `${h}h ${mins}m` : `${h}h`;
               };
+              const minToDecH = (m: number) => (m / 60);
+              const capEquiv = (brutoMin: number) => {
+                const horas = brutoMin / 60;
+                return (horas / 8.35).toFixed(2);
+              };
               // Chart: group indicadores by turno, show neto trend
               const byTurnoChart: Record<string, any[]> = {};
               for (const ind of indicadores) {
@@ -1307,6 +1312,7 @@ export default function DashboardPage() {
                                 <th className="text-left py-1.5 px-2 font-semibold">Fecha</th>
                                 <th className="text-center py-1.5 px-2 font-semibold">Turno</th>
                                 <th className="text-right py-1.5 px-2 font-semibold text-red-600">Bruto</th>
+                                <th className="text-right py-1.5 px-2 font-semibold text-blue-600">Cap. Equiv.</th>
                                 <th className="text-right py-1.5 px-2 font-semibold">Descanso</th>
                                 <th className="text-right py-1.5 px-2 font-semibold text-purple-600">TM Inf</th>
                                 <th className="text-right py-1.5 px-2 font-semibold text-green-700">Neto</th>
@@ -1326,6 +1332,7 @@ export default function DashboardPage() {
                                     }`}>{ind.turno}</span>
                                   </td>
                                   <td className="py-1.5 px-2 text-right font-medium text-red-600">{minToH(ind.brutoMin || 0)}</td>
+                                  <td className="py-1.5 px-2 text-right font-medium text-blue-600">{capEquiv(ind.brutoMin || 0)}</td>
                                   <td className="py-1.5 px-2 text-right">{minToH(ind.descansoMin || 0)}</td>
                                   <td className="py-1.5 px-2 text-right text-purple-600">{minToH(ind.tmInfMin || 0)}</td>
                                   <td className="py-1.5 px-2 text-right font-bold text-green-700">{minToH(ind.netoMin || 0)}</td>
