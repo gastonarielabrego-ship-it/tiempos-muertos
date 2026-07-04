@@ -370,12 +370,17 @@ export default function DashboardPage() {
     }
     setUploading(true);
     try {
-      // Read file as base64 and send as JSON to avoid Vercel FUNCTION_PAYLOAD_TOO_LARGE
-      const arrayBuffer = await file.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuffer);
-      let binary = '';
-      for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
-      const base64 = btoa(binary);
+      // Read file as base64 using FileReader (efficient, no blocking loop)
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          // Remove the "data:application/...;base64," prefix
+          resolve(dataUrl.split(',')[1] || '');
+        };
+        reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+        reader.readAsDataURL(file);
+      });
       const res = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
