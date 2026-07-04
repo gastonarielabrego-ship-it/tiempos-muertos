@@ -8,14 +8,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Solo disponible en producción (Turso)' }, { status: 400 });
     }
 
-    const formData = await request.formData();
-    const file = formData.get('file') as File | null;
+    let buffer: Buffer;
 
-    if (!file) {
-      return NextResponse.json({ error: 'No se proporcionó ningún archivo' }, { status: 400 });
+    const contentType = request.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      // Receive file as base64 in JSON body (avoids Vercel FUNCTION_PAYLOAD_TOO_LARGE)
+      const body = await request.json();
+      const { base64, fileName } = body;
+      if (!base64) {
+        return NextResponse.json({ error: 'No se proporcionó ningún archivo' }, { status: 400 });
+      }
+      buffer = Buffer.from(base64, 'base64');
+    } else {
+      // Fallback: FormData
+      const formData = await request.formData();
+      const file = formData.get('file') as File | null;
+      if (!file) {
+        return NextResponse.json({ error: 'No se proporcionó ningún archivo' }, { status: 400 });
+      }
+      buffer = Buffer.from(await file.arrayBuffer());
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];

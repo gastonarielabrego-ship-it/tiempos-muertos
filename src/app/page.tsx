@@ -364,11 +364,23 @@ export default function DashboardPage() {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 4 * 1024 * 1024) {
+      toast({ title: 'Archivo muy grande', description: 'El archivo no debe superar los 4MB', variant: 'destructive' });
+      return;
+    }
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      // Read file as base64 and send as JSON to avoid Vercel FUNCTION_PAYLOAD_TOO_LARGE
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
+      const base64 = btoa(binary);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64, fileName: file.name }),
+      });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(text || `Error HTTP ${res.status}`);
