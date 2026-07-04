@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -364,34 +365,84 @@ export default function DashboardPage() {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: 'Archivo muy grande', description: 'El archivo no debe superar los 10MB', variant: 'destructive' });
-      return;
-    }
     setUploading(true);
     try {
-      // Read file as base64 using FileReader (efficient, no blocking loop)
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = reader.result as string;
-          // Remove the "data:application/...;base64," prefix
-          resolve(dataUrl.split(',')[1] || '');
-        };
-        reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
-        reader.readAsDataURL(file);
-      });
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64, fileName: file.name }),
-      });
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(text || `Error HTTP ${res.status}`);
+      // Parse xlsx in browser to avoid Vercel payload size limits
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
+
+      if (!rawRows || rawRows.length === 0) {
+        throw new Error('El archivo está vacío');
       }
-      const data = await res.json();
-      toast({ title: 'Datos actualizados', description: `${data.totalRecords} registros cargados` });
+
+      // Validate columns
+      const required = ['CODUTI', 'NOMUTI', 'FECHA', 'HORA', 'CODACT', 'ZONSTS', 'ALLSTS', 'DPLSTS', 'NIVSTS', 'CODPRO', 'PCBPRO', 'BULTOS'];
+      const missing = required.filter(col => !(col in rawRows[0]));
+      if (missing.length > 0) throw new Error(`Faltan columnas: ${missing.join(', ')}`);
+
+      // Parse all rows on client
+      const parsedRows = rawRows.map(row => {
+        let fechaStr = '';
+        const rawFecha = row['FECHA'];
+        if (rawFecha instanceof Date) fechaStr = rawFecha.toISOString();
+        else if (typeof rawFecha === 'number') {
+          const excelEpoch = new Date(1899, 11, 30);
+          fechaStr = new Date(excelEpoch.getTime() + rawFecha * 86400000).toISOString();
+        } else if (typeof rawFecha === 'string') fechaStr = new Date(rawFecha).toISOString();
+
+        let hora = '';
+        const rawHora = row['HORA'];
+        if (typeof rawHora === 'number') {
+          const totalSeconds = Math.floor(rawHora * 86400);
+          const h = Math.floor(totalSeconds / 3600);
+          const m = Math.floor((totalSeconds % 3600) / 60);
+          const s = totalSeconds % 60;
+          hora = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        } else if (typeof rawHora === 'string') hora = rawHora;
+        else if (rawHora instanceof Date) hora = rawHora.toTimeString().slice(0, 8);
+
+        return {
+          codUti: String(row['CODUTI'] || ''),
+          nomUti: String(row['NOMUTI'] || ''),
+          fecha: fechaStr,
+          hora,
+          codAct: Number(row['CODACT']) || 0,
+          zonSts: row['ZONSTS'] ? String(row['ZONSTS']) : null,
+          allSts: Number(row['ALLSTS']) || 0,
+          dplSts: Number(row['DPLSTS']) || 0,
+          nivSts: Number(row['NIVSTS']) || 0,
+          codPro: String(row['CODPRO'] || ''),
+          pcbPro: Number(row['PCBPRO']) || 0,
+          bultos: Number(row['BULTOS']) || 0,
+        };
+      });
+
+      // Send in batches to avoid Vercel payload limits
+      const BATCH_SIZE = 2000;
+      let totalInserted = 0;
+      for (let i = 0; i < parsedRows.length; i += BATCH_SIZE) {
+        const batch = parsedRows.slice(i, i + BATCH_SIZE);
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rows: batch,
+            clearFirst: i === 0,
+            totalExpected: parsedRows.length,
+          }),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `Error HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        totalInserted += data.inserted || 0;
+      }
+
+      toast({ title: 'Datos actualizados', description: `${totalInserted} registros cargados` });
       setHasData(true);
       setSelectedOp('all');
       setSelectedTurno('all');
