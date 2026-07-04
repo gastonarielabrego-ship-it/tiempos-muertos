@@ -364,8 +364,8 @@ export default function DashboardPage() {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      toast({ title: 'Archivo muy grande', description: 'El archivo no debe superar los 4MB', variant: 'destructive' });
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: 'Archivo muy grande', description: 'El archivo no debe superar los 10MB', variant: 'destructive' });
       return;
     }
     setUploading(true);
