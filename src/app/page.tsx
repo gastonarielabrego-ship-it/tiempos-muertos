@@ -369,8 +369,11 @@ export default function DashboardPage() {
       const fd = new FormData();
       fd.append('file', file);
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(text || `Error HTTP ${res.status}`);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
       toast({ title: 'Datos actualizados', description: `${data.totalRecords} registros cargados` });
       setHasData(true);
       setSelectedOp('all');
