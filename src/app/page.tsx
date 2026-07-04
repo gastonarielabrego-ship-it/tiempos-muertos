@@ -1318,15 +1318,26 @@ export default function DashboardPage() {
                       <h3 className="text-sm font-semibold">Indicadores</h3>
                       <p className="text-[10px] text-muted-foreground">Fecha: {fechaLabel} — Turno: {turnoLabel}</p>
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveIndicador}
-                      disabled={savingIndicador}
-                      className="h-8 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      {savingIndicador ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />}
-                      Guardar
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs gap-1"
+                        onClick={() => window.open('/api/export-indicadores', '_blank')}
+                      >
+                        <FileSpreadsheet className="h-3 w-3" />
+                        Descargar Excel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveIndicador}
+                        disabled={savingIndicador}
+                        className="h-8 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {savingIndicador ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />}
+                        Guardar
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Gráfico: Tiempo Neto por Turno */}
