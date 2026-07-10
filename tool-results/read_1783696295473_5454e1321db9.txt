@@ -1,0 +1,402 @@
+     1→   557→   557→
+     2→   558→   558→              <span className="text-xs font-medium text-muted-foreground ml-2">Fecha:</span>
+     3→   559→   559→              <Select value={selectedDate} onValueChange={handleDateChange}>
+     4→   560→   560→                <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs">
+     5→   561→   561→                  <SelectValue placeholder="Todas" />
+     6→   562→   562→                </SelectTrigger>
+     7→   563→   563→                <SelectContent>
+     8→   564→   564→                  <SelectItem value="all">Todas las fechas</SelectItem>
+     9→   565→   565→                  {filters?.dates.map(d => (
+    10→   566→   566→                    <SelectItem key={d} value={d}>{d}</SelectItem>
+    11→   567→   567→                  ))}
+    12→   568→   568→                </SelectContent>
+    13→   569→   569→              </Select>
+    14→   570→   570→
+    15→   571→   571→              {(selectedOp !== 'all' || selectedTurno !== 'all' || selectedDate !== 'all') && (
+    16→   572→   572→                <Button variant="ghost" size="sm" onClick={() => { setSelectedOp('all'); setSelectedTurno('all'); setSelectedDate('all'); setActiveTab('ranking'); }} className="h-8 text-xs">
+    17→   573→   573→                  <X className="h-3 w-3 mr-1" />Limpiar
+    18→   574→   574→                </Button>
+    19→   575→   575→              )}
+    20→   576→   576→            </div>
+    21→   577→   577→
+    22→   578→   578→            {/* KPIs */}
+    23→   579→   579→            {stats && !loading && (
+    24→   580→   580→              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    25→   581→   581→                <Card>
+    26→   582→   582→                  <CardContent className="p-4 flex items-center gap-3">
+    27→   583→   583→                    <div className="rounded-lg bg-blue-500 p-2"><BarChart3 className="h-4 w-4 text-white" /></div>
+    28→   584→   584→                    <div>
+    29→   585→   585→                      <p className="text-[10px] sm:text-xs text-muted-foreground">Total Escaneos</p>
+    30→   586→   586→                      <p className="text-lg sm:text-2xl font-bold">{stats.kpis.totalScans.toLocaleString('es-AR')}</p>
+    31→   587→   587→                    </div>
+    32→   588→   588→                  </CardContent>
+    33→   589→   589→                </Card>
+    34→   590→   590→                <Card className="border-red-200 bg-red-50/60">
+    35→   591→   591→                  <CardContent className="p-4 flex items-center gap-3">
+    36→   592→   592→                    <div className="rounded-lg bg-red-500 p-2"><Clock className="h-4 w-4 text-white" /></div>
+    37→   593→   593→                    <div>
+    38→   594→   594→                      <p className="text-[10px] sm:text-xs text-red-600 font-medium">Suma Tiempos Muertos</p>
+    39→   595→   595→                      <p className="text-lg sm:text-2xl font-bold text-red-700">{fmtDur(stats.kpis.totalDeadTime)}</p>
+    40→   596→   596→                      <p className="text-[10px] text-red-500">{stats.kpis.deadTimeEvents} eventos (&gt;5 min)</p>
+    41→   597→   597→                    </div>
+    42→   598→   598→                  </CardContent>
+    43→   599→   599→                </Card>
+    44→   600→   600→                <Card>
+    45→   601→   601→                  <CardContent className="p-4 flex items-center gap-3">
+    46→   602→   602→                    <div className="rounded-lg bg-amber-500 p-2"><AlertTriangle className="h-4 w-4 text-white" /></div>
+    47→   603→   603→                    <div>
+    48→   604→   604→                      <p className="text-[10px] sm:text-xs text-muted-foreground">Promedio Gap (&gt;5 min)</p>
+    49→   605→   605→                      <p className="text-lg sm:text-2xl font-bold">{fmtDur(stats.kpis.avgGap)}</p>
+    50→   606→   606→                      <p className="text-[10px] text-muted-foreground">solo tiempos muertos</p>
+    51→   607→   607→                    </div>
+    52→   608→   608→                  </CardContent>
+    53→   609→   609→                </Card>
+    54→   610→   610→                <Card>
+    55→   611→   611→                  <CardContent className="p-4 flex items-center gap-3">
+    56→   612→   612→                    <div className="rounded-lg bg-orange-500 p-2"><AlertTriangle className="h-4 w-4 text-white" /></div>
+    57→   613→   613→                    <div>
+    58→   614→   614→                      <p className="text-[10px] sm:text-xs text-muted-foreground">Mayor sin Actividad</p>
+    59→   615→   615→                      <p className="text-lg sm:text-2xl font-bold">{fmtDur(stats.kpis.maxGap)}</p>
+    60→   616→   616→                    </div>
+    61→   617→   617→                  </CardContent>
+    62→   618→   618→                </Card>
+    63→   619→   619→              </div>
+    64→   620→   620→            )}
+    65→   621→   621→
+    66→   622→   622→            {/* Summary + Shift breakdown */}
+    67→   623→   623→            {stats && !loading && selectedOp === 'all' && selectedTurno === 'all' && (
+    68→   624→   624→              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    69→   625→   625→                <Card className="border-red-200 bg-red-50/50">
+    70→   626→   626→                  <CardContent className="p-4 sm:p-5">
+    71→   627→   627→                    <div className="flex items-center gap-2 mb-2">
+    72→   628→   628→                      <ArrowDown className="h-4 w-4 text-red-500" />
+    73→   629→   629→                      <h3 className="text-sm font-semibold text-red-700">Resumen (&gt;5 min)</h3>
+    74→   630→   630→                    </div>
+    75→   631→   631→                    <div className="grid grid-cols-2 gap-3 text-sm">
+    76→   632→   632→                      <div>
+    77→   633→   633→                        <span className="text-[10px] text-muted-foreground block">Eventos</span>
+    78→   634→   634→                        <span className="font-bold text-red-600 text-base">{stats.kpis.deadTimeEvents}</span>
+    79→   635→   635→                      </div>
+    80→   636→   636→                      <div>
+    81→   637→   637→                        <span className="text-[10px] text-muted-foreground block">Suma total</span>
+    82→   638→   638→                        <span className="font-bold text-red-600 text-base">{fmtDur(stats.kpis.totalDeadTime)}</span>
+    83→   639→   639→                      </div>
+    84→   640→   640→                    </div>
+    85→   641→   641→                  </CardContent>
+    86→   642→   642→                </Card>
+    87→   643→   643→                <Card className="lg:col-span-2">
+    88→   644→   644→                  <CardContent className="p-4 sm:p-5">
+    89→   645→   645→                    <h3 className="text-sm font-semibold mb-3">Por Turno</h3>
+    90→   646→   646→                    <p className="text-[10px] text-muted-foreground mb-3">
+    91→   647→   647→                      TM (6-14hs) · TT (14-22hs) · TN (resto)
+    92→   648→   648→                    </p>
+    93→   649→   649→                    <div className="grid grid-cols-3 gap-3">
+    94→   650→   650→                      {(['TM', 'TT', 'TN'] as const).map(t => (
+    95→   651→   651→                        <div key={t} className={`rounded-lg p-3 border ${t === 'TM' ? 'bg-amber-50 border-amber-200' : t === 'TT' ? 'bg-orange-50 border-orange-200' : 'bg-indigo-50 border-indigo-200'}`}>
+    96→   652→   652→                          <div className="flex items-center gap-1.5 mb-1">
+    97→   653→   653→                            <TurnoBadge turno={t} />
+    98→   654→   654→                          </div>
+    99→   655→   655→                          <p className={`text-lg font-bold ${t === 'TM' ? 'text-amber-900' : t === 'TT' ? 'text-orange-900' : 'text-indigo-900'}`}>
+   100→   656→   656→                            {fmtDur(stats.byShift[t].sec)}
+   101→   657→   657→                          </p>
+   102→   658→   658→                          <p className={`text-[10px] ${t === 'TM' ? 'text-amber-600' : t === 'TT' ? 'text-orange-600' : 'text-indigo-600'}`}>
+   103→   659→   659→                            {stats.byShift[t].events} eventos · {Math.round(stats.byShift[t].sec / 60)} min
+   104→   660→   660→                          </p>
+   105→   661→   661→                        </div>
+   106→   662→   662→                      ))}
+   107→   663→   663→                    </div>
+   108→   664→   664→                  </CardContent>
+   109→   665→   665→                </Card>
+   110→   666→   666→              </div>
+   111→   667→   667→            )}
+   112→   668→   668→
+   113→   669→   669→            {/* Operator detail summary */}
+   114→   670→   670→            {selectedOp !== 'all' && selectedOpStats && gapSummary && (
+   115→   671→   671→              <Card className="border-red-200 bg-red-50/50">
+   116→   672→   672→                <CardContent className="p-4 sm:p-5">
+   117→   673→   673→                  <div className="flex items-center gap-2 mb-3">
+   118→   674→   674→                    <User className="h-4 w-4 text-red-500" />
+   119→   675→   675→                    <h3 className="text-sm font-semibold text-red-700">{selectedOpName}</h3>
+   120→   676→   676→                    <TurnoBadge turno={selectedOpStats.turno} />
+   121→   677→   677→                    <Button
+   122→   678→   678→                      variant="outline"
+   123→   679→   679→                      size="sm"
+   124→   680→   680→                      className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+   125→   681→   681→                      onClick={() => {
+   126→   682→   682→                        const params = new URLSearchParams();
+   127→   683→   683→                        params.set('codUti', selectedOp);
+   128→   684→   684→                        params.set('nomUti', selectedOpName || '');
+   129→   685→   685→                        params.set('turno', selectedOpStats.turno);
+   130→   686→   686→                        params.set('tiempoNetoMin', String(selectedOpStats.totalNetoMin));
+   131→   687→   687→                        params.set('tiempoBrutoMin', String(selectedOpStats.totalMin));
+   132→   688→   688→                        params.set('descansoMin', String(selectedOpStats.descansoMin));
+   133→   689→   689→                        window.open(`/sanciones?${params}`, '_blank');
+   134→   690→   690→                      }}
+   135→   691→   691→                    >
+   136→   692→   692→                      <Shield className="h-3 w-3" />
+   137→   693→   693→                      Sanción
+   138→   694→   694→                    </Button>
+   139→   695→   695→                  </div>
+   140→   696→   696→                  <div className="space-y-1.5 text-sm">
+   141→   697→   697→                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-red-100">
+   142→   698→   698→                      <span className="text-[10px] text-muted-foreground">Tiempo Muerto</span>
+   143→   699→   699→                      <span className="text-xs text-right font-bold text-red-600">{fmtDur(selectedOpStats.totalMinSec)}</span>
+   144→   700→   700→                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.totalMin} min</span>
+   145→   701→   701→                    </div>
+   146→   702→   702→                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-purple-100">
+   147→   703→   703→                      <span className="text-[10px] text-muted-foreground">TM Informados</span>
+   148→   704→   704→                      <span className="text-xs text-right font-bold text-purple-700">{selectedOpStats.tmInfMin > 0 ? `-${selectedOpStats.tmInfMin} min` : '—'}</span>
+   149→   705→   705→                      <span className="text-[10px] text-right text-purple-500">{selectedOpStats.tmInfEventos > 0 ? `${selectedOpStats.tmInfEventos} eventos` : '—'}</span>
+   150→   706→   706→                    </div>
+   151→   707→   707→                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-slate-200">
+   152→   708→   708→                      <span className="text-[10px] text-muted-foreground">Descanso</span>
+   153→   709→   709→                      <span className="text-xs text-right font-medium text-slate-500">{selectedOpStats.descansoMin > 0 ? `-${fmtDur(selectedOpStats.descansoMinSec)}` : '—'}</span>
+   154→   710→   710→                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.descansoMin > 0 ? `-${selectedOpStats.descansoMin} min (${selectedOpStats.diasTrabajados}d x 35m)` : selectedOpStats.turno === 'TN' ? 'no aplica (TN)' : '—'}</span>
+   155→   711→   711→                    </div>
+   156→   712→   712→                    <div className="grid grid-cols-3 gap-2 items-center py-1.5 bg-green-50/60 rounded px-1">
+   157→   713→   713→                      <span className="text-[10px] font-semibold text-green-700">Tiempo Neto</span>
+   158→   714→   714→                      <span className="text-xs text-right font-bold text-green-700">{fmtDur(selectedOpStats.totalNetoMinSec)}</span>
+   159→   715→   715→                      <span className="text-[10px] text-right text-green-600">{selectedOpStats.totalNetoMin} min</span>
+   160→   716→   716→                    </div>
+   161→   717→   717→                    <div className="grid grid-cols-3 gap-2 items-center pt-1 border-t border-slate-200">
+   162→   718→   718→                      <span className="text-[10px] text-muted-foreground">Eventos / Mayor gap</span>
+   163→   719→   719→                      <span className="text-xs text-right font-bold">{gapSummary.deadTimeCount} eventos</span>
+   164→   720→   720→                      <span className="text-xs text-right font-mono text-red-700">{fmtDur(selectedOpStats.maxGap)}</span>
+   165→   721→   721→                    </div>
+   166→   722→   722→                  </div>
+   167→   723→   723→                </CardContent>
+   168→   724→   724→              </Card>
+   169→   725→   725→            )}
+   170→   726→   726→
+   171→   727→   727→            {/* Tabs */}
+   172→   728→   728→            {stats && !loading && (
+   173→   729→   729→              <div className="flex gap-1 border-b">
+   174→   730→   730→                <button
+   175→   731→   731→                  onClick={() => setActiveTab('ranking')}
+   176→   732→   732→                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+   177→   733→   733→                    activeTab === 'ranking' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+   178→   734→   734→                  }`}
+   179→   735→   735→                >
+   180→   736→   736→                  <Trophy className="h-3 w-3 inline mr-1" />
+   181→   737→   737→                  Ranking
+   182→   738→   738→                </button>
+   183→   739→   739→                <button
+   184→   740→   740→                  onClick={() => setActiveTab('operador')}
+   185→   741→   741→                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+   186→   742→   742→                    activeTab === 'operador' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+   187→   743→   743→                  }`}
+   188→   744→   744→                >
+   189→   745→   745→                  <User className="h-3 w-3 inline mr-1" />
+   190→   746→   746→                  Por Operador
+   191→   747→   747→                  {selectedOp !== 'all' && (
+   192→   748→   748→                    <span className="ml-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">
+   193→   749→   749→                      {selectedOpName}
+   194→   750→   750→                    </span>
+   195→   751→   751→                  )}
+   196→   752→   752→                </button>
+   197→   753→   753→                <button
+   198→   754→   754→                  onClick={() => setActiveTab('picks')}
+   199→   755→   755→                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+   200→   756→   756→                    activeTab === 'picks' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+   201→   757→   757→                  }`}
+   202→   758→   758→                >
+   203→   759→   759→                  <PlayCircle className="h-3 w-3 inline mr-1" />
+   204→   760→   760→                  Picks
+   205→   761→   761→                </button>
+   206→   762→   762→                <button
+   207→   763→   763→                  onClick={() => setActiveTab('sanciones')}
+   208→   764→   764→                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors relative ${
+   209→   765→   765→                    activeTab === 'sanciones' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+   210→   766→   766→                  }`}
+   211→   767→   767→                >
+   212→   768→   768→                  <Shield className="h-3 w-3 inline mr-1" />
+   213→   769→   769→                  Sanciones
+   214→   770→   770→                  {sancionCount > 0 && (
+   215→   771→   771→                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full h-4 min-w-4 flex items-center justify-center px-1">
+   216→   772→   772→                      {sancionCount}
+   217→   773→   773→                    </span>
+   218→   774→   774→                  )}
+   219→   775→   775→                </button>
+   220→   776→   776→                <button
+   221→   777→   777→                  onClick={() => setActiveTab('indicadores')}
+   222→   778→   778→                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+   223→   779→   779→                    activeTab === 'indicadores' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+   224→   780→   780→                  }`}
+   225→   781→   781→                >
+   226→   782→   782→                  <BarChart3 className="h-3 w-3 inline mr-1" />
+   227→   783→   783→                  Indicadores
+   228→   784→   784→                </button>
+   229→   785→   785→              </div>
+   230→   786→   786→            )}
+   231→   787→   787→
+   232→   788→   788→            {/* ===================== RANKING TAB ===================== */}
+   233→   789→   789→            {activeTab === 'ranking' && stats && stats.byOperator.length > 0 && (
+   234→   790→   790→              <Card>
+   235→   791→   791→                <CardContent className="p-4">
+   236→   792→   792→                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+   237→   793→   793→                    <h3 className="text-sm font-semibold">Ranking por Suma de Tiempo Muerto</h3>
+   238→   794→   794→                    <div className="flex items-center gap-2">
+   239→   795→   795→                      <Button
+   240→   796→   796→                        variant="outline"
+   241→   797→   797→                        size="sm"
+   242→   798→   798→                        className="h-7 text-xs gap-1"
+   243→   799→   799→                        onClick={() => {
+   244→   800→   800→                          const params = new URLSearchParams();
+   245→   801→   801→                          if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+   246→   802→   802→                          if (selectedDate !== 'all') params.set('fecha', selectedDate);
+   247→   803→   803→                          window.open(`/api/export-ranking?${params}`, '_blank');
+   248→   804→   804→                        }}
+   249→   805→   805→                      >
+   250→   806→   806→                        <Download className="h-3 w-3" />
+   251→   807→   807→                        <span className="hidden sm:inline">Descargar Excel</span>
+   252→   808→   808→                      </Button>
+   253→   809→   809→                      <span className="text-xs text-muted-foreground">{stats.byOperator.length} operadores</span>
+   254→   810→   810→                    </div>
+   255→   811→   811→                  </div>
+   256→   812→   812→                  <div className="overflow-x-auto">
+   257→   813→   813→                    <Table>
+   258→   814→   814→                      <TableHeader>
+   259→   815→   815→                        <TableRow>
+   260→   816→   816→                          <TableHead className="text-xs w-12 text-center">#</TableHead>
+   261→   817→   817→                          <TableHead className="text-xs">Operador</TableHead>
+   262→   818→   818→                          <TableHead className="text-xs text-center">Turno</TableHead>
+   263→   819→   819→                          <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
+   264→   820→   820→                          <TableHead className="text-xs text-right">Descanso</TableHead>
+   265→   821→   821→                          <TableHead className="text-xs text-right">T. Muerto Inf.</TableHead>
+   266→   822→   822→                          <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
+   267→   823→   823→                          <TableHead className="text-xs text-center">Dias</TableHead>
+   268→   824→   824→                          <TableHead className="text-xs text-right">Bultos</TableHead>
+   269→   825→   825→                          <TableHead className="text-xs text-right">Eventos</TableHead>
+   270→   826→   826→                          <TableHead className="text-xs text-right">Mayor Gap</TableHead>
+   271→   827→   827→                          <TableHead className="text-xs w-10"></TableHead>
+   272→   828→   828→                        </TableRow>
+   273→   829→   829→                      </TableHeader>
+   274→   830→   830→                      <TableBody>
+   275→   831→   831→                        {stats.byOperator.map((op, i) => {
+   276→   832→   832→                          const isTop3 = i < 3;
+   277→   833→   833→                          return (
+   278→   834→   834→                            <TableRow key={op.codUti}
+   279→   835→   835→                              className={`${isTop3 ? 'bg-red-50 hover:bg-red-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+   280→   836→   836→                              onClick={() => handleOperatorClick(op.codUti)}
+   281→   837→   837→                            >
+   282→   838→   838→                              <TableCell className="text-center">
+   283→   839→   839→                                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+   284→   840→   840→                                  isTop3 ? 'bg-red-500 text-white' : i < 10 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-muted-foreground'
+   285→   841→   841→                                }`}>{i + 1}</span>
+   286→   842→   842→                              </TableCell>
+   287→   843→   843→                              <TableCell>
+   288→   844→   844→                                <div className="text-xs font-medium">{op.nomUti}</div>
+   289→   845→   845→                                <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+   290→   846→   846→                              </TableCell>
+   291→   847→   847→                              <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
+   292→   848→   848→                              <TableCell className="text-xs text-right font-bold">
+   293→   849→   849→                                <span className={isTop3 ? 'text-red-600' : op.totalMin > 100 ? 'text-orange-600' : ''}>
+   294→   850→   850→                                  {fmtDur(op.totalMinSec)}
+   295→   851→   851→                                </span>
+   296→   852→   852→                              </TableCell>
+   297→   853→   853→                              <TableCell className="text-right">
+   298→   854→   854→                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{op.descansoMin > 0 ? `-${fmtDur(op.descansoMinSec)}` : '—'}</span>
+   299→   855→   855→                              </TableCell>
+   300→   856→   856→                              <TableCell className="text-right">
+   301→   857→   857→                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
+   302→   858→   858→                                  {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
+   303→   859→   859→                                </span>
+   304→   860→   860→                                {op.tmInfEventos > 0 && <div className="text-[9px] text-purple-500 text-center">{op.tmInfEventos} ev.</div>}
+   305→   861→   861→                              </TableCell>
+   306→   862→   862→                              <TableCell className="text-xs text-right font-bold">
+   307→   863→   863→                                <span className="text-green-700">
+   308→   864→   864→                                  {fmtDur(op.totalNetoMinSec)}
+   309→   865→   865→                                </span>
+   310→   866→   866→                              </TableCell>
+   311→   867→   867→                              <TableCell className="text-xs text-center text-muted-foreground">{op.diasTrabajados}</TableCell>
+   312→   868→   868→                              <TableCell className="text-xs text-right font-medium">{op.totalBultos.toLocaleString('es-AR')}</TableCell>
+   313→   869→   869→                              <TableCell className="text-xs text-right">{op.events}</TableCell>
+   314→   870→   870→                              <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
+   315→   871→   871→                              <TableCell className="text-center"><span className="text-[10px] text-muted-foreground">ver</span></TableCell>
+   316→   872→   872→                            </TableRow>
+   317→   873→   873→                          );
+   318→   874→   874→                        })}
+   319→   875→   875→                      </TableBody>
+   320→   876→   876→                    </Table>
+   321→   877→   877→                  </div>
+   322→   878→   878→                </CardContent>
+   323→   879→   879→              </Card>
+   324→   880→   880→            )}
+   325→   881→   881→
+   326→   882→   882→            {/* ===================== POR OPERADOR TAB ===================== */}
+   327→   883→   883→            {activeTab === 'operador' && (
+   328→   884→   884→              selectedOp === 'all' ? (
+   329→   885→   885→                <Card>
+   330→   886→   886→                  <CardContent className="flex flex-col items-center py-12">
+   331→   887→   887→                    <User className="h-10 w-10 text-muted-foreground/30 mb-3" />
+   332→   888→   888→                    <p className="text-sm text-muted-foreground">Seleccioná un operador del ranking o del filtro para ver sus eventos</p>
+   333→   889→   889→                  </CardContent>
+   334→   890→   890→                </Card>
+   335→   891→   891→              ) : (
+   336→   892→   892→                <Card>
+   337→   893→   893→                  <CardContent className="p-4">
+   338→   894→   894→                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+   339→   895→   895→                      <h3 className="text-sm font-semibold">Eventos de {selectedOpName}</h3>
+   340→   896→   896→                      <div className="flex items-center gap-2">
+   341→   897→   897→                        <Button
+   342→   898→   898→                          variant="outline"
+   343→   899→   899→                          size="sm"
+   344→   900→   900→                          className="h-7 text-xs gap-1"
+   345→   901→   901→                          onClick={() => {
+   346→   902→   902→                            const params = new URLSearchParams();
+   347→   903→   903→                            params.set('operator', selectedOp);
+   348→   904→   904→                            if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+   349→   905→   905→                            if (selectedDate !== 'all') params.set('fecha', selectedDate);
+   350→   906→   906→                            window.open(`/api/export-operator?${params}`, '_blank');
+   351→   907→   907→                          }}
+   352→   908→   908→                        >
+   353→   909→   909→                          <Download className="h-3 w-3" />
+   354→   910→   910→                          <span className="hidden sm:inline">Descargar Excel</span>
+   355→   911→   911→                        </Button>
+   356→   912→   912→                        <span className="text-xs text-muted-foreground">{gapTotal} gaps &gt;5 min</span>
+   357→   913→   913→                      </div>
+   358→   914→   914→                    </div>
+   359→   915→   915→                    {gapLoading ? (
+   360→   916→   916→                      <div className="flex items-center justify-center py-12">
+   361→   917→   917→                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+   362→   918→   918→                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+   363→   919→   919→                      </div>
+   364→   920→   920→                    ) : gaps.length === 0 ? (
+   365→   921→   921→                      <div className="text-center py-12 text-sm text-muted-foreground">No se encontraron gaps mayores a 5 minutos</div>
+   366→   922→   922→                    ) : (
+   367→   923→   923→                      <>
+   368→   924→   924→                        <div className="overflow-x-auto">
+   369→   925→   925→                          <Table>
+   370→   926→   926→                            <TableHeader>
+   371→   927→   927→                              <TableRow>
+   372→   928→   928→                                <TableHead className="text-xs w-10 text-center">#</TableHead>
+   373→   929→   929→                                <TableHead className="text-xs">Fecha</TableHead>
+   374→   930→   930→                                <TableHead className="text-xs text-center w-14">Turno</TableHead>
+   375→   931→   931→                                <TableHead className="text-xs text-center bg-blue-50" colSpan={4}>Pickeo Previo</TableHead>
+   376→   932→   932→                                <TableHead className="text-xs text-center">Trayecto</TableHead>
+   377→   933→   933→                                <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
+   378→   934→   934→                                <TableHead className="text-xs text-center bg-green-50" colSpan={4}>Pickeo Posterior</TableHead>
+   379→   935→   935→                              </TableRow>
+   380→   936→   936→                              <TableRow>
+   381→   937→   937→                                <TableHead className="text-[10px]"></TableHead>
+   382→   938→   938→                                <TableHead className="text-[10px]"></TableHead>
+   383→   939→   939→                                <TableHead className="text-[10px]"></TableHead>
+   384→   940→   940→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
+   385→   941→   941→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+   386→   942→   942→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Bultos</TableHead>
+   387→   943→   943→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
+   388→   944→   944→                                <TableHead className="text-[10px] text-muted-foreground">Zona → Zona</TableHead>
+   389→   945→   945→                                <TableHead className="text-[10px]"></TableHead>
+   390→   946→   946→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
+   391→   947→   947→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+   392→   948→   948→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Bultos</TableHead>
+   393→   949→   949→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
+   394→   950→   950→                              </TableRow>
+   395→   951→   951→                            </TableHeader>
+   396→   952→   952→                            <TableBody>
+   397→   953→   953→                              {gaps.map((row) => {
+   398→   954→   954→                                const isTop3 = row.rank <= 3;
+   399→   955→   955→                                const sameZone = row.prevZonSts === row.currZonSts;
+   400→   956→   956→                                return (
+   401→
+   402→[showing lines 557-956 of 1467; use offset=957 with limit to continue reading]

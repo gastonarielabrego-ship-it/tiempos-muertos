@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     const operator = searchParams.get('operator') || 'all';
     const turnoFilter = searchParams.get('turno');
     const fechaFilter = searchParams.get('fecha');
+    const zonaFilter = searchParams.get('zona');
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '100');
 
@@ -27,10 +28,17 @@ export async function GET(request: NextRequest) {
     if (operator !== 'all') where.codUti = operator;
     if (fechaFilter) where.fecha = fechaFilter;
 
-    const allScans = await db.scanRecord.findMany({
+    let allScans = await db.scanRecord.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
       orderBy: [{ codUti: 'asc' }, { fecha: 'asc' }, { hora: 'asc' }],
     });
+
+    // Filter by zona type
+    if (zonaFilter === 'std') {
+      allScans = allScans.filter((s: any) => !s.zonSts || !String(s.zonSts).toUpperCase().includes('V'));
+    } else if (zonaFilter === 'xd') {
+      allScans = allScans.filter((s: any) => s.zonSts && String(s.zonSts).toUpperCase().includes('V'));
+    }
 
     interface GapRow {
       rank: number;

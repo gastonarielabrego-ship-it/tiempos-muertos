@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
     const operator = searchParams.get('operator');
     const turnoFilter = searchParams.get('turno');
     const fechaFilter = searchParams.get('fecha');
+    const zonaFilter = searchParams.get('zona');
 
     if (!operator || operator === 'all') {
       return NextResponse.json({ error: 'Se requiere un operador' }, { status: 400 });
@@ -37,10 +38,17 @@ export async function GET(request: NextRequest) {
     const where: Record<string, unknown> = { codUti: operator };
     if (fechaFilter) where.fecha = fechaFilter;
 
-    const allScans = await db.scanRecord.findMany({
+    let allScans = await db.scanRecord.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
       orderBy: [{ fecha: 'asc' }, { hora: 'asc' }],
     });
+
+    // Filter by zona type
+    if (zonaFilter === 'std') {
+      allScans = allScans.filter((s: any) => !s.zonSts || !String(s.zonSts).toUpperCase().includes('V'));
+    } else if (zonaFilter === 'xd') {
+      allScans = allScans.filter((s: any) => s.zonSts && String(s.zonSts).toUpperCase().includes('V'));
+    }
 
     // Group by day
     const grouped = new Map<string, typeof allScans>();

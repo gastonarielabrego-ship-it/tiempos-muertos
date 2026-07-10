@@ -36,14 +36,22 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const turnoFilter = searchParams.get('turno');
     const fechaFilter = searchParams.get('fecha');
+    const zonaFilter = searchParams.get('zona');
 
     const where: Record<string, unknown> = {};
     if (fechaFilter) where.fecha = fechaFilter;
 
-    const scans = await db.scanRecord.findMany({
+    let scans = await db.scanRecord.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
       orderBy: [{ codUti: 'asc' }, { fecha: 'asc' }, { hora: 'asc' }],
     });
+
+    // Filter by zona type
+    if (zonaFilter === 'std') {
+      scans = scans.filter((s: any) => !s.zonSts || !String(s.zonSts).toUpperCase().includes('V'));
+    } else if (zonaFilter === 'xd') {
+      scans = scans.filter((s: any) => s.zonSts && String(s.zonSts).toUpperCase().includes('V'));
+    }
 
     if (scans.length === 0) {
       return new NextResponse('Sin datos', { status: 404 });

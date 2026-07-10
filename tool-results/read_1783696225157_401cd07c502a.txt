@@ -1,0 +1,468 @@
+  1000→                          </div>
+  1001→                        </div>
+  1002→                      </>
+  1003→                    )}
+  1004→                  </CardContent>
+  1005→                </Card>
+  1006→              )
+  1007→            )}
+  1008→
+  1009→            {/* ===================== PICKS TAB ===================== */}
+  1010→            {activeTab === 'picks' && (
+  1011→              <Card>
+  1012→                <CardContent className="p-4">
+  1013→                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+  1014→                    <h3 className="text-sm font-semibold">Primer y Último Pikeo por Colaborador</h3>
+  1015→                    <span className="text-xs text-muted-foreground">{picksTotal} registros</span>
+  1016→                  </div>
+  1017→                  {picksLoading ? (
+  1018→                    <div className="flex items-center justify-center py-12">
+  1019→                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  1020→                      <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+  1021→                    </div>
+  1022→                  ) : picks.length === 0 ? (
+  1023→                    <div className="text-center py-12 text-sm text-muted-foreground">Sin datos</div>
+  1024→                  ) : (
+  1025→                    <>
+  1026→                      <div className="overflow-x-auto">
+  1027→                        <Table>
+  1028→                          <TableHeader>
+  1029→                            <TableRow>
+  1030→                              <TableHead className="text-xs">Operador</TableHead>
+  1031→                              <TableHead className="text-xs">Fecha</TableHead>
+  1032→                              <TableHead className="text-xs text-center w-14">Turno</TableHead>
+  1033→                              <TableHead className="text-xs text-center">Escaneos</TableHead>
+  1034→                              <TableHead className="text-xs text-center bg-blue-50" colSpan={3}>
+  1035→                                <span className="flex items-center justify-center gap-1"><PlayCircle className="h-3 w-3 text-blue-500" /> Primer Pikeo</span>
+  1036→                              </TableHead>
+  1037→                              <TableHead className="text-xs text-center">Jornada</TableHead>
+  1038→                              <TableHead className="text-xs text-center">Descanso</TableHead>
+  1039→                              <TableHead className="text-xs text-center">Efectiva</TableHead>
+  1040→                              <TableHead className="text-xs text-center bg-green-50" colSpan={3}>
+  1041→                                <span className="flex items-center justify-center gap-1"><StopCircle className="h-3 w-3 text-green-500" /> Último Pikeo</span>
+  1042→                              </TableHead>
+  1043→                            </TableRow>
+  1044→                            <TableRow>
+  1045→                              <TableHead className="text-[10px]"></TableHead>
+  1046→                              <TableHead className="text-[10px]"></TableHead>
+  1047→                              <TableHead className="text-[10px]"></TableHead>
+  1048→                              <TableHead className="text-[10px]"></TableHead>
+  1049→                              <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
+  1050→                              <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+  1051→                              <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
+  1052→                              <TableHead className="text-[10px] text-muted-foreground">Bruta</TableHead>
+  1053→                              <TableHead className="text-[10px] text-muted-foreground">35m</TableHead>
+  1054→                              <TableHead className="text-[10px] text-muted-foreground">Neta</TableHead>
+  1055→                              <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
+  1056→                              <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+  1057→                              <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
+  1058→                            </TableRow>
+  1059→                          </TableHeader>
+  1060→                          <TableBody>
+  1061→                            {picks.map((row, i) => (
+  1062→                              <TableRow key={`${row.codUti}-${row.fecha}`}
+  1063→                                className="cursor-pointer hover:bg-slate-50"
+  1064→                                onClick={() => handleOperatorClick(row.codUti)}
+  1065→                              >
+  1066→                                <TableCell>
+  1067→                                  <div className="text-xs font-medium">{row.nomUti}</div>
+  1068→                                  <div className="text-[10px] text-muted-foreground">{row.codUti}</div>
+  1069→                                </TableCell>
+  1070→                                <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+  1071→                                <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
+  1072→                                <TableCell className="text-xs text-center font-mono">{row.totalScans}</TableCell>
+  1073→                                {/* Primer pikeo */}
+  1074→                                <TableCell className="text-xs font-mono text-blue-700 bg-blue-50/50">{row.primerHora}</TableCell>
+  1075→                                <TableCell className="text-xs bg-blue-50/50">
+  1076→                                  <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.primerZona || '—'}</span>
+  1077→                                </TableCell>
+  1078→                                <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.primerProducto}</TableCell>
+  1079→                                {/* Jornada Bruta */}
+  1080→                                <TableCell className="text-center">
+  1081→                                  <span className="text-xs text-muted-foreground">{fmtDur(row.jornadaSec)}</span>
+  1082→                                </TableCell>
+  1083→                                {/* Descanso */}
+  1084→                                <TableCell className="text-center">
+  1085→                                  <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">-35m</span>
+  1086→                                </TableCell>
+  1087→                                {/* Jornada Efectiva */}
+  1088→                                <TableCell className="text-center">
+  1089→                                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+  1090→                                    row.jornadaEfectivaSec < 3600 ? 'bg-green-100 text-green-700'
+  1091→                                    : row.jornadaEfectivaSec < 21600 ? 'bg-amber-100 text-amber-700'
+  1092→                                    : 'bg-red-100 text-red-700'
+  1093→                                  }`}>
+  1094→                                    {fmtDur(row.jornadaEfectivaSec)}
+  1095→                                  </span>
+  1096→                                </TableCell>
+  1097→                                {/* Último pikeo */}
+  1098→                                <TableCell className="text-xs font-mono text-green-700 bg-green-50/50">{row.ultimoHora}</TableCell>
+  1099→                                <TableCell className="text-xs bg-green-50/50">
+  1100→                                  <span className="inline-block px-1.5 py-0.5 rounded bg-green-200 text-green-800 text-[10px] font-semibold">{row.ultimoZona || '—'}</span>
+  1101→                                </TableCell>
+  1102→                                <TableCell className="text-[10px] font-mono text-muted-foreground bg-green-50/50 max-w-[110px] truncate">{row.ultimoProducto}</TableCell>
+  1103→                              </TableRow>
+  1104→                            ))}
+  1105→                          </TableBody>
+  1106→                        </Table>
+  1107→                      </div>
+  1108→                      <div className="flex items-center justify-between mt-3 pt-3 border-t">
+  1109→                        <span className="text-xs text-muted-foreground">Página {picksPage} de {picksTotalPages} ({picksTotal} registros)</span>
+  1110→                        <div className="flex items-center gap-1">
+  1111→                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={picksPage <= 1} onClick={() => fetchPicks(picksPage - 1)}><ChevronLeft className="h-3 w-3" /></Button>
+  1112→                          <span className="text-xs px-2">{picksPage} / {picksTotalPages}</span>
+  1113→                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={picksPage >= picksTotalPages} onClick={() => fetchPicks(picksPage + 1)}><ChevronRight className="h-3 w-3" /></Button>
+  1114→                        </div>
+  1115→                      </div>
+  1116→                    </>
+  1117→                  )}
+  1118→                </CardContent>
+  1119→              </Card>
+  1120→            )}
+  1121→
+  1122→            {/* ===================== SANCIONES TAB ===================== */}
+  1123→            {activeTab === 'sanciones' && (
+  1124→              <div className="space-y-4">
+  1125→                {/* Summary cards */}
+  1126→                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  1127→                  <Card>
+  1128→                    <CardContent className="p-4 flex items-center gap-3">
+  1129→                      <div className="rounded-lg bg-red-500 p-2"><Shield className="h-4 w-4 text-white" /></div>
+  1130→                      <div>
+  1131→                        <p className="text-[10px] sm:text-xs text-muted-foreground">Total Sanciones</p>
+  1132→                        <p className="text-lg sm:text-2xl font-bold">{sanciones.length}</p>
+  1133→                      </div>
+  1134→                    </CardContent>
+  1135→                  </Card>
+  1136→                  <Card>
+  1137→                    <CardContent className="p-4 flex items-center gap-3">
+  1138→                      <div className="rounded-lg bg-orange-500 p-2"><User className="h-4 w-4 text-white" /></div>
+  1139→                      <div>
+  1140→                        <p className="text-[10px] sm:text-xs text-muted-foreground">Operadores Sancionados</p>
+  1141→                        <p className="text-lg sm:text-2xl font-bold">{new Set(sanciones.map((s: any) => s.codUti)).size}</p>
+  1142→                      </div>
+  1143→                    </CardContent>
+  1144→                  </Card>
+  1145→                  <Card>
+  1146→                    <CardContent className="p-4 flex items-center gap-3">
+  1147→                      <div className="rounded-lg bg-amber-500 p-2"><Clock className="h-4 w-4 text-white" /></div>
+  1148→                      <div>
+  1149→                        <p className="text-[10px] sm:text-xs text-muted-foreground">Esta Semana</p>
+  1150→                        <p className="text-lg sm:text-2xl font-bold">{sanciones.filter((s: any) => { const d = new Date(s.createdAt); const now = new Date(); const diff = (now.getTime() - d.getTime()) / 86400000; return diff <= 7; }).length}</p>
+  1151→                      </div>
+  1152→                    </CardContent>
+  1153→                  </Card>
+  1154→                  <Card>
+  1155→                    <CardContent className="p-4 flex items-center gap-3">
+  1156→                      <div className="rounded-lg bg-purple-500 p-2"><AlertTriangle className="h-4 w-4 text-white" /></div>
+  1157→                      <div>
+  1158→                        <p className="text-[10px] sm:text-xs text-muted-foreground">Esta Quincena</p>
+  1159→                        <p className="text-lg sm:text-2xl font-bold">{sanciones.filter((s: any) => { const d = new Date(s.createdAt); const now = new Date(); const diff = (now.getTime() - d.getTime()) / 86400000; return diff <= 15; }).length}</p>
+  1160→                      </div>
+  1161→                    </CardContent>
+  1162→                  </Card>
+  1163→                </div>
+  1164→
+  1165→                {/* Action buttons */}
+  1166→                <div className="flex items-center gap-2">
+  1167→                  <Button
+  1168→                    variant="outline"
+  1169→                    size="sm"
+  1170→                    className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+  1171→                    onClick={() => {
+  1172→                      const params = new URLSearchParams();
+  1173→                      if (selectedOp !== 'all') {
+  1174→                        params.set('codUti', selectedOp);
+  1175→                        params.set('nomUti', selectedOpName || '');
+  1176→                        const opStat = stats?.byOperator.find(o => o.codUti === selectedOp);
+  1177→                        params.set('turno', opStat?.turno || '');
+  1178→                        params.set('tiempoNetoMin', String(opStat?.totalNetoMin || 0));
+  1179→                        params.set('tiempoBrutoMin', String(opStat?.totalMin || 0));
+  1180→                        params.set('descansoMin', String(opStat?.descansoMin || 0));
+  1181→                      }
+  1182→                      window.open(`/sanciones?${params}`, '_blank');
+  1183→                    }}
+  1184→                  >
+  1185→                    <Shield className="h-3 w-3" />
+  1186→                    Nueva Sanción
+  1187→                  </Button>
+  1188→                  <Button
+  1189→                    variant="outline"
+  1190→                    size="sm"
+  1191→                    className="h-7 text-xs gap-1"
+  1192→                    onClick={() => window.open('/api/export-sanciones', '_blank')}
+  1193→                  >
+  1194→                    <Download className="h-3 w-3" />
+  1195→                    Descargar Excel
+  1196→                  </Button>
+  1197→                </div>
+  1198→
+  1199→                {/* History table */}
+  1200→                <Card>
+  1201→                  <CardContent className="p-4">
+  1202→                    <h3 className="text-sm font-semibold mb-3">Historial de Sanciones</h3>
+  1203→                    {sancionesLoading ? (
+  1204→                      <div className="flex items-center justify-center py-12">
+  1205→                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  1206→                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+  1207→                      </div>
+  1208→                    ) : sanciones.length === 0 ? (
+  1209→                      <div className="text-center py-12 text-sm text-muted-foreground">No hay sanciones registradas</div>
+  1210→                    ) : (
+  1211→                      <div className="overflow-x-auto">
+  1212→                        <Table>
+  1213→                          <TableHeader>
+  1214→                            <TableRow>
+  1215→                              <TableHead className="text-xs">Fecha</TableHead>
+  1216→                              <TableHead className="text-xs">Legajo</TableHead>
+  1217→                              <TableHead className="text-xs">Nombre</TableHead>
+  1218→                              <TableHead className="text-xs text-center">Turno</TableHead>
+  1219→                              <TableHead className="text-xs text-right">T. Neto</TableHead>
+  1220→                              <TableHead className="text-xs">Fecha Med.</TableHead>
+  1221→                              <TableHead className="text-xs text-center">Sanc.</TableHead>
+  1222→                              <TableHead className="text-xs">Ultima Sanc.</TableHead>
+  1223→                              <TableHead className="text-xs w-10"></TableHead>
+  1224→                            </TableRow>
+  1225→                          </TableHeader>
+  1226→                          <TableBody>
+  1227→                            {sanciones.slice(0, 50).map((s: any, i: number) => {
+  1228→                              const counts = sancionesCounts[s.codUti];
+  1229→                              return (
+  1230→                                <TableRow
+  1231→                                  key={s.id}
+  1232→                                  className={`${i === 0 ? 'bg-red-50 hover:bg-red-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+  1233→                                  onClick={() => {
+  1234→                                    setSelectedOp(s.codUti);
+  1235→                                    setActiveTab('operador');
+  1236→                                  }}
+  1237→                                >
+  1238→                                  <TableCell className="text-xs whitespace-nowrap">
+  1239→                                    {s.createdAt ? s.createdAt.split('T')[0] : ''}
+  1240→                                  </TableCell>
+  1241→                                  <TableCell className="text-xs font-mono">{s.codUti}</TableCell>
+  1242→                                  <TableCell className="text-xs">{s.nomUti}</TableCell>
+  1243→                                  <TableCell className="text-center">
+  1244→                                    {s.turno && <TurnoBadge turno={s.turno} />}
+  1245→                                  </TableCell>
+  1246→                                  <TableCell className="text-xs text-right font-bold text-red-600">
+  1247→                                    {s.tiempoNeto != null ? `${s.tiempoNeto} min` : '—'}
+  1248→                                  </TableCell>
+  1249→                                  <TableCell className="text-xs whitespace-nowrap">{s.fechaMedicion || ''}</TableCell>
+  1250→                                  <TableCell className="text-xs text-center">
+  1251→                                    <span className="inline-flex items-center justify-center bg-red-100 text-red-700 text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5">
+  1252→                                      {counts?.count || 0}
+  1253→                                    </span>
+  1254→                                  </TableCell>
+  1255→                                  <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
+  1256→                                    {counts?.lastDate || '—'}
+  1257→                                  </TableCell>
+  1258→                                  <TableCell className="text-center">
+  1259→                                    <button
+  1260→                                      onClick={(e) => handleDeleteSancion(s.id, e)}
+  1261→                                      className="p-1 rounded hover:bg-red-100 text-slate-400 hover:text-red-600 transition-colors"
+  1262→                                      title="Eliminar sancion"
+  1263→                                    >
+  1264→                                      <Trash2 className="h-3 w-3" />
+  1265→                                    </button>
+  1266→                                  </TableCell>
+  1267→                                </TableRow>
+  1268→                              );
+  1269→                            })}
+  1270→                          </TableBody>
+  1271→                        </Table>
+  1272→                      </div>
+  1273→                    )}
+  1274→                  </CardContent>
+  1275→                </Card>
+  1276→              </div>
+  1277→            )}
+  1278→          </>
+  1279→        )}
+  1280→
+  1281→            {/* ===================== INDICADORES TAB ===================== */}
+  1282→            {activeTab === 'indicadores' && stats && !loading && (() => {
+  1283→              const brutoMin = Math.round(stats.kpis.totalDeadTime / 60 * 10) / 10;
+  1284→              const turnoLabel = selectedTurno !== 'all' ? selectedTurno : 'Todos';
+  1285→              const fechaLabel = selectedDate !== 'all' ? selectedDate : 'Todas las fechas';
+  1286→              const minToH = (m: number) => {
+  1287→                const h = Math.floor(m / 60);
+  1288→                const mins = Math.round(m % 60 * 10) / 10;
+  1289→                return mins > 0 ? `${h}h ${mins}m` : `${h}h`;
+  1290→              };
+  1291→              const minToDecH = (m: number) => (m / 60);
+  1292→              const capEquiv = (brutoMin: number) => {
+  1293→                const horas = brutoMin / 60;
+  1294→                return (horas / 8.35).toFixed(2);
+  1295→              };
+  1296→              const bultosPorHora = (bultos: number, prepMin: number) => {
+  1297→                const horas = prepMin / 60;
+  1298→                if (horas <= 0) return '0.00';
+  1299→                return (bultos / horas).toFixed(2);
+  1300→              };
+  1301→              // Chart: group indicadores by turno, show neto trend
+  1302→              const byTurnoChart: Record<string, any[]> = {};
+  1303→              for (const ind of indicadores) {
+  1304→                const t = ind.turno || 'todos';
+  1305→                if (!byTurnoChart[t]) byTurnoChart[t] = [];
+  1306→                byTurnoChart[t].push(ind);
+  1307→              }
+  1308→              // Sort each group by fecha
+  1309→              for (const t of Object.keys(byTurnoChart)) {
+  1310→                byTurnoChart[t].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+  1311→              }
+  1312→
+  1313→              return (
+  1314→                <div className="space-y-4">
+  1315→                  {/* Header with save */}
+  1316→                  <div className="flex flex-wrap items-center justify-between gap-2">
+  1317→                    <div>
+  1318→                      <h3 className="text-sm font-semibold">Indicadores</h3>
+  1319→                      <p className="text-[10px] text-muted-foreground">Fecha: {fechaLabel} — Turno: {turnoLabel}</p>
+  1320→                    </div>
+  1321→                    <div className="flex items-center gap-2">
+  1322→                      <Button
+  1323→                        variant="outline"
+  1324→                        size="sm"
+  1325→                        className="h-8 text-xs gap-1"
+  1326→                        onClick={() => window.open('/api/export-indicadores', '_blank')}
+  1327→                      >
+  1328→                        <FileSpreadsheet className="h-3 w-3" />
+  1329→                        Descargar Excel
+  1330→                      </Button>
+  1331→                      <Button
+  1332→                        size="sm"
+  1333→                        onClick={handleSaveIndicador}
+  1334→                        disabled={savingIndicador}
+  1335→                        className="h-8 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+  1336→                      >
+  1337→                        {savingIndicador ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />}
+  1338→                        Guardar
+  1339→                      </Button>
+  1340→                    </div>
+  1341→                  </div>
+  1342→
+  1343→                  {/* Gráfico: Tiempo Neto por Turno */}
+  1344→                  {indicadores.length >= 2 && Object.keys(byTurnoChart).length > 0 && (
+  1345→                    <Card>
+  1346→                      <CardContent className="p-4">
+  1347→                        <h4 className="text-xs font-semibold mb-3">Indicador Tiempo Neto por Turno</h4>
+  1348→                        <div className="space-y-4">
+  1349→                          {Object.entries(byTurnoChart).map(([turno, items]) => {
+  1350→                            if (items.length < 2) return null;
+  1351→                            const maxVal = Math.max(...items.map((x: any) => x.netoMin || 0), 1);
+  1352→                            return (
+  1353→                              <div key={turno}>
+  1354→                                <div className="flex items-center gap-2 mb-1">
+  1355→                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+  1356→                                    turno === 'TM' ? 'bg-amber-100 text-amber-700' :
+  1357→                                    turno === 'TT' ? 'bg-orange-100 text-orange-700' :
+  1358→                                    turno === 'TN' ? 'bg-indigo-100 text-indigo-700' :
+  1359→                                    'bg-slate-100 text-slate-600'
+  1360→                                  }`}>{turno.toUpperCase()}</span>
+  1361→                                </div>
+  1362→                                <div className="flex items-end gap-1 h-24">
+  1363→                                  {items.map((ind: any, i: number) => {
+  1364→                                    const val = ind.netoMin || 0;
+  1365→                                    const prev = i > 0 ? (items[i - 1].netoMin || 0) : val;
+  1366→                                    const wentUp = val >= prev;
+  1367→                                    const barColor = wentUp ? 'bg-red-500' : 'bg-green-500';
+  1368→                                    const h = Math.max((val / maxVal) * 100, 3);
+  1369→                                    return (
+  1370→                                      <div key={ind.id} className="flex-1 flex flex-col items-center gap-0.5 group relative">
+  1371→                                        <div className={`w-full ${barColor} rounded-t-sm transition-all cursor-default`} style={{ height: `${h}%` }} />
+  1372→                                        <span className="text-[7px] text-muted-foreground leading-tight">{ind.fecha?.slice(5) || ''}</span>
+  1373→                                        {/* Tooltip */}
+  1374→                                        <div className="absolute bottom-full mb-1 hidden group-hover:block bg-slate-800 text-white text-[8px] rounded px-1.5 py-1 whitespace-nowrap z-10">
+  1375→                                          {ind.fecha}: {minToH(val)}
+  1376→                                          <span className={wentUp ? 'text-red-300' : 'text-green-300'}>
+  1377→                                            {wentUp ? ' ↑' : ' ↓'}
+  1378→                                          </span>
+  1379→                                        </div>
+  1380→                                      </div>
+  1381→                                    );
+  1382→                                  })}
+  1383→                                </div>
+  1384→                              </div>
+  1385→                            );
+  1386→                          })}
+  1387→                        </div>
+  1388→                      </CardContent>
+  1389→                    </Card>
+  1390→                  )}
+  1391→
+  1392→                  {/* Tabla de indicadores */}
+  1393→                  <Card>
+  1394→                    <CardContent className="p-4">
+  1395→                      <h4 className="text-xs font-semibold mb-3">Registro de Indicadores</h4>
+  1396→                      {indicadoresLoading ? (
+  1397→                        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+  1398→                      ) : indicadores.length === 0 ? (
+  1399→                        <p className="text-[10px] text-muted-foreground text-center py-6">No hay indicadores guardados. Presiona &quot;Guardar&quot; para registrar el estado actual.</p>
+  1400→                      ) : (
+  1401→                        <div className="overflow-x-auto">
+  1402→                          <table className="w-full text-[10px]">
+  1403→                            <thead>
+  1404→                              <tr className="border-b">
+  1405→                                <th className="text-left py-1.5 px-1.5 font-semibold">Fecha</th>
+  1406→                                <th className="text-center py-1.5 px-1.5 font-semibold">Turno</th>
+  1407→                                <th className="text-right py-1.5 px-1.5 font-semibold text-cyan-700">T. Preparación</th>
+  1408→                                <th className="text-center py-1.5 px-1.5 font-semibold text-slate-600">Colab.</th>
+  1409→                                <th className="text-right py-1.5 px-1.5 font-semibold text-slate-600">Bultos</th>
+  1410→                                <th className="text-right py-1.5 px-1.5 font-semibold text-red-600">TM Bruto</th>
+  1411→                                <th className="text-right py-1.5 px-1.5 font-semibold">Descanso</th>
+  1412→                                <th className="text-right py-1.5 px-1.5 font-semibold text-purple-600">TM Inf</th>
+  1413→                                <th className="text-right py-1.5 px-1.5 font-semibold text-green-700">TM Neto</th>
+  1414→                                <th className="text-right py-1.5 px-1.5 font-semibold text-blue-600">Cap. Equiv.</th>
+  1415→                                <th className="text-right py-1.5 px-1.5 font-semibold text-emerald-600">Bultos/h</th>
+  1416→                                <th className="w-8"></th>
+  1417→                              </tr>
+  1418→                            </thead>
+  1419→                            <tbody>
+  1420→                              {indicadores.map((ind: any) => (
+  1421→                                <tr key={ind.id} className="border-b border-slate-100 hover:bg-slate-50">
+  1422→                                  <td className="py-1.5 px-1.5">{ind.fecha}</td>
+  1423→                                  <td className="py-1.5 px-1.5 text-center">
+  1424→                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+  1425→                                      ind.turno === 'TM' ? 'bg-amber-100 text-amber-700' :
+  1426→                                      ind.turno === 'TT' ? 'bg-orange-100 text-orange-700' :
+  1427→                                      ind.turno === 'TN' ? 'bg-indigo-100 text-indigo-700' :
+  1428→                                      'bg-slate-100 text-slate-600'
+  1429→                                    }`}>{ind.turno}</span>
+  1430→                                  </td>
+  1431→                                  <td className="py-1.5 px-1.5 text-right font-medium text-cyan-700">{minToH(ind.totalPreparacionMin || 0)}</td>
+  1432→                                  <td className="py-1.5 px-1.5 text-center text-slate-600">{ind.totalColaboradores || 0}</td>
+  1433→                                  <td className="py-1.5 px-1.5 text-right text-slate-600">{ind.totalBultos?.toLocaleString() || '0'}</td>
+  1434→                                  <td className="py-1.5 px-1.5 text-right font-medium text-red-600">{minToH(ind.brutoMin || 0)}</td>
+  1435→                                  <td className="py-1.5 px-1.5 text-right">{minToH(ind.descansoMin || 0)}</td>
+  1436→                                  <td className="py-1.5 px-1.5 text-right text-purple-600">{minToH(ind.tmInfMin || 0)}</td>
+  1437→                                  <td className="py-1.5 px-1.5 text-right font-bold text-green-700">{minToH(ind.netoMin || 0)}</td>
+  1438→                                  <td className="py-1.5 px-1.5 text-right font-medium text-blue-600">{capEquiv(ind.brutoMin || 0)}</td>
+  1439→                                  <td className="py-1.5 px-1.5 text-right font-medium text-emerald-600">{bultosPorHora(ind.totalBultos || 0, ind.totalPreparacionMin || 0)}</td>
+  1440→                                  <td className="py-1.5 px-1.5">
+  1441→                                    <button onClick={() => handleDeleteIndicador(ind.id)} className="text-slate-400 hover:text-red-500 transition-colors">
+  1442→                                      <Trash2 className="h-3 w-3" />
+  1443→                                    </button>
+  1444→                                  </td>
+  1445→                                </tr>
+  1446→                              ))}
+  1447→                            </tbody>
+  1448→                          </table>
+  1449→                        </div>
+  1450→                      )}
+  1451→                    </CardContent>
+  1452→                  </Card>
+  1453→                </div>
+  1454→              );
+  1455→            })()}
+  1456→      </main>
+  1457→
+  1458→      <footer className="mt-auto border-t bg-white/60">
+  1459→        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6">
+  1460→          <p className="text-center text-[10px] text-muted-foreground">
+  1461→            Umbral: &gt;5 min = tiempo muerto — TM (6-14hs) TT (14-22hs) TN (resto)
+  1462→          </p>
+  1463→        </div>
+  1464→      </footer>
+  1465→    </div>
+  1466→  );
+  1467→}

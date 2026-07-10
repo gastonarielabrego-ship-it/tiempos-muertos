@@ -15,7 +15,7 @@ import {
   Loader2, Database, Timer, ChevronLeft, ChevronRight,
   X, ArrowDown, Trophy, ArrowRight, User, Sun, Sunset, Moon,
   PlayCircle, StopCircle, Download, FileSpreadsheet, Shield,
-  Trash2, Coffee, FileText, TrendingDown,
+  Trash2, Coffee, FileText, TrendingDown, Package,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -125,7 +125,7 @@ function TurnoBadge({ turno }: { turno: string }) {
   );
 }
 
-type TabType = 'ranking' | 'operador' | 'picks' | 'sanciones' | 'indicadores';
+type TabType = 'ranking' | 'operador' | 'prep-std' | 'prep-xd' | 'picks' | 'sanciones' | 'indicadores';
 
 // --- Main Page ---
 export default function DashboardPage() {
@@ -142,6 +142,24 @@ export default function DashboardPage() {
   const [picksTotalPages, setPicksTotalPages] = useState(1);
   const [picksTotal, setPicksTotal] = useState(0);
   const [picksLoading, setPicksLoading] = useState(false);
+
+  // === STD State ===
+  const [stdStats, setStdStats] = useState<{ kpis: KPIs; byOperator: OpStat[] } | null>(null);
+  const [stdGaps, setStdGaps] = useState<GapRow[]>([]);
+  const [stdGapPage, setStdGapPage] = useState(1);
+  const [stdGapTotalPages, setStdGapTotalPages] = useState(1);
+  const [stdGapTotal, setStdGapTotal] = useState(0);
+  const [stdGapLoading, setStdGapLoading] = useState(false);
+  const [stdSelectedOp, setStdSelectedOp] = useState<string>('all');
+
+  // === XD State ===
+  const [xdStats, setXdStats] = useState<{ kpis: KPIs; byOperator: OpStat[] } | null>(null);
+  const [xdGaps, setXdGaps] = useState<GapRow[]>([]);
+  const [xdGapPage, setXdGapPage] = useState(1);
+  const [xdGapTotalPages, setXdGapTotalPages] = useState(1);
+  const [xdGapTotal, setXdGapTotal] = useState(0);
+  const [xdGapLoading, setXdGapLoading] = useState(false);
+  const [xdSelectedOp, setXdSelectedOp] = useState<string>('all');
 
   const [loading, setLoading] = useState(true);
   const [gapLoading, setGapLoading] = useState(false);
@@ -238,6 +256,43 @@ export default function DashboardPage() {
     }
   }, [selectedOp, selectedTurno, selectedDate, toast]);
 
+  const fetchZonaStats = useCallback(async (zona: 'std' | 'xd', setter: (data: any) => void) => {
+    try {
+      const params = new URLSearchParams();
+      params.set('zona', zona);
+      if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+      if (selectedDate !== 'all') params.set('fecha', selectedDate);
+      const res = await fetch(`/api/stats?${params}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setter(data);
+    } catch { /* silent */ }
+  }, [selectedTurno, selectedDate]);
+
+  const fetchZonaGaps = useCallback(async (zona: 'std' | 'xd', operator: string, page: number, setter: (data: any) => void, setPage: (p: number) => void, setTotalPages: (p: number) => void, setTotal: (t: number) => void, setLoading: (l: boolean) => void) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('zona', zona);
+      params.set('page', String(page));
+      params.set('pageSize', '50');
+      params.set('operator', operator);
+      if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+      if (selectedDate !== 'all') params.set('fecha', selectedDate);
+      const res = await fetch(`/api/movements?${params}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setter(data.rows);
+      setPage(data.pagination.page);
+      setTotalPages(data.pagination.totalPages);
+      setTotal(data.pagination.total);
+    } catch {
+      toast({ title: 'Error', description: 'No se pudieron cargar los gaps', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedTurno, selectedDate, toast]);
+
   useEffect(() => { fetchFilters(); }, [fetchFilters]);
 
   const fetchSanciones = useCallback(async () => {
@@ -332,10 +387,18 @@ export default function DashboardPage() {
     if (!hasData) return;
     fetchStats();
     if (activeTab === 'operador' && selectedOp !== 'all') fetchGaps(1);
+    if (activeTab === 'prep-std') {
+      fetchZonaStats('std', setStdStats);
+      if (stdSelectedOp !== 'all') fetchZonaGaps('std', stdSelectedOp, stdGapPage, setStdGaps, setStdGapPage, setStdGapTotalPages, setStdGapTotal, setStdGapLoading);
+    }
+    if (activeTab === 'prep-xd') {
+      fetchZonaStats('xd', setXdStats);
+      if (xdSelectedOp !== 'all') fetchZonaGaps('xd', xdSelectedOp, xdGapPage, setXdGaps, setXdGapPage, setXdGapTotalPages, setXdGapTotal, setXdGapLoading);
+    }
     if (activeTab === 'picks') fetchPicks(1);
     if (activeTab === 'sanciones') fetchSanciones();
     if (activeTab === 'indicadores') fetchIndicadores();
-  }, [selectedOp, selectedTurno, selectedDate, activeTab, hasData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedOp, selectedTurno, selectedDate, activeTab, hasData, stdSelectedOp, stdGapPage, xdSelectedOp, xdGapPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpChange = (val: string) => {
     setSelectedOp(val);
@@ -751,6 +814,24 @@ export default function DashboardPage() {
                   )}
                 </button>
                 <button
+                  onClick={() => setActiveTab('prep-std')}
+                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+                    activeTab === 'prep-std' ? 'border-blue-500 text-blue-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Package className="h-3 w-3 inline mr-1" />
+                  Prep. STD
+                </button>
+                <button
+                  onClick={() => setActiveTab('prep-xd')}
+                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+                    activeTab === 'prep-xd' ? 'border-purple-500 text-purple-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Package className="h-3 w-3 inline mr-1" />
+                  Prep. XD
+                </button>
+                <button
                   onClick={() => setActiveTab('picks')}
                   className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
                     activeTab === 'picks' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -997,6 +1078,448 @@ export default function DashboardPage() {
                             <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage <= 1} onClick={() => fetchGaps(gapPage - 1)}><ChevronLeft className="h-3 w-3" /></Button>
                             <span className="text-xs px-2">{gapPage} / {gapTotalPages}</span>
                             <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage >= gapTotalPages} onClick={() => fetchGaps(gapPage + 1)}><ChevronRight className="h-3 w-3" /></Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            )}
+
+            {/* ===================== PREP STD TAB ===================== */}
+            {activeTab === 'prep-std' && (
+              stdSelectedOp === 'all' ? (
+                stdStats && stdStats.byOperator.length > 0 ? (
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <h3 className="text-sm font-semibold text-blue-700">Ranking Preparación STD</h3>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            onClick={() => {
+                              const params = new URLSearchParams();
+                              params.set('zona', 'std');
+                              if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+                              if (selectedDate !== 'all') params.set('fecha', selectedDate);
+                              window.open(`/api/export-ranking?${params}`, '_blank');
+                            }}
+                          >
+                            <Download className="h-3 w-3" />
+                            <span className="hidden sm:inline">Descargar Excel</span>
+                          </Button>
+                          <span className="text-xs text-muted-foreground">{stdStats.byOperator.length} operadores</span>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-xs w-12 text-center">#</TableHead>
+                              <TableHead className="text-xs">Operador</TableHead>
+                              <TableHead className="text-xs text-center">Turno</TableHead>
+                              <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
+                              <TableHead className="text-xs text-right">Descanso</TableHead>
+                              <TableHead className="text-xs text-right">T. Muerto Inf.</TableHead>
+                              <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
+                              <TableHead className="text-xs text-center">Dias</TableHead>
+                              <TableHead className="text-xs text-right">Bultos</TableHead>
+                              <TableHead className="text-xs text-right">Eventos</TableHead>
+                              <TableHead className="text-xs text-right">Mayor Gap</TableHead>
+                              <TableHead className="text-xs w-10"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {stdStats.byOperator.map((op, i) => {
+                              const isTop3 = i < 3;
+                              return (
+                                <TableRow key={`std-${op.codUti}`}
+                                  className={`${isTop3 ? 'bg-blue-50 hover:bg-blue-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+                                  onClick={() => { setStdSelectedOp(op.codUti); setStdGapPage(1); }}
+                                >
+                                  <TableCell className="text-center">
+                                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                      isTop3 ? 'bg-blue-500 text-white' : i < 10 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-muted-foreground'
+                                    }`}>{i + 1}</span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="text-xs font-medium">{op.nomUti}</div>
+                                    <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+                                  </TableCell>
+                                  <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
+                                  <TableCell className="text-xs text-right font-bold text-blue-600">{fmtDur(op.totalMinSec)}</TableCell>
+                                  <TableCell className="text-right">
+                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{op.descansoMin > 0 ? `-${fmtDur(op.descansoMinSec)}` : '—'}</span>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
+                                      {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
+                                    </span>
+                                    {op.tmInfEventos > 0 && <div className="text-[9px] text-purple-500 text-center">{op.tmInfEventos} ev.</div>}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-right font-bold text-green-700">{fmtDur(op.totalNetoMinSec)}</TableCell>
+                                  <TableCell className="text-xs text-center text-muted-foreground">{op.diasTrabajados}</TableCell>
+                                  <TableCell className="text-xs text-right font-medium">{op.totalBultos.toLocaleString('es-AR')}</TableCell>
+                                  <TableCell className="text-xs text-right">{op.events}</TableCell>
+                                  <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
+                                  <TableCell className="text-center"><span className="text-[10px] text-muted-foreground">ver</span></TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="flex flex-col items-center py-12">
+                      <Package className="h-10 w-10 text-blue-200 mb-3" />
+                      <p className="text-sm text-muted-foreground">Sin datos para Preparación STD (zonas sin V)</p>
+                    </CardContent>
+                  </Card>
+                )
+              ) : (
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => { setStdSelectedOp('all'); }}>
+                          <ChevronLeft className="h-3 w-3" /> STD
+                        </Button>
+                        <h3 className="text-sm font-semibold text-blue-700">
+                          {stdStats?.byOperator.find(o => o.codUti === stdSelectedOp)?.nomUti || stdSelectedOp}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => {
+                            const params = new URLSearchParams();
+                            params.set('zona', 'std');
+                            params.set('operator', stdSelectedOp);
+                            if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+                            if (selectedDate !== 'all') params.set('fecha', selectedDate);
+                            window.open(`/api/export-operator?${params}`, '_blank');
+                          }}
+                        >
+                          <Download className="h-3 w-3" />
+                          <span className="hidden sm:inline">Descargar Excel</span>
+                        </Button>
+                        <span className="text-xs text-muted-foreground">{stdGapTotal} gaps &gt;5 min</span>
+                      </div>
+                    </div>
+                    {stdGapLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+                      </div>
+                    ) : stdGaps.length === 0 ? (
+                      <div className="text-center py-12 text-sm text-muted-foreground">No se encontraron gaps mayores a 5 minutos</div>
+                    ) : (
+                      <>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-xs w-10 text-center">#</TableHead>
+                                <TableHead className="text-xs">Fecha</TableHead>
+                                <TableHead className="text-xs text-center w-14">Turno</TableHead>
+                                <TableHead className="text-xs text-center bg-blue-50" colSpan={4}>Pickeo Previo</TableHead>
+                                <TableHead className="text-xs text-center">Trayecto</TableHead>
+                                <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
+                                <TableHead className="text-xs text-center bg-green-50" colSpan={4}>Pickeo Posterior</TableHead>
+                              </TableRow>
+                              <TableRow>
+                                <TableHead className="text-[10px]"></TableHead>
+                                <TableHead className="text-[10px]"></TableHead>
+                                <TableHead className="text-[10px]"></TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Bultos</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground">Zona → Zona</TableHead>
+                                <TableHead className="text-[10px]"></TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Bultos</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {stdGaps.map((row) => {
+                                const isTop3 = row.rank <= 3;
+                                const sameZone = row.prevZonSts === row.currZonSts;
+                                return (
+                                  <TableRow key={`std-${row.fecha}-${row.prevHora}-${row.currHora}`}
+                                    className={isTop3 ? 'bg-blue-50 hover:bg-blue-100/70' : ''}>
+                                    <TableCell className="text-center">
+                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                        isTop3 ? 'bg-blue-500 text-white' : 'bg-slate-100 text-muted-foreground'
+                                      }`}>{row.rank}</span>
+                                    </TableCell>
+                                    <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+                                    <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
+                                    <TableCell className="text-xs font-mono text-muted-foreground bg-blue-50/50">{row.prevHora}</TableCell>
+                                    <TableCell className="text-xs bg-blue-50/50">
+                                      <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.prevZonSts || '—'}</span>
+                                    </TableCell>
+                                    <TableCell className="text-xs text-center font-semibold bg-blue-50/50 text-blue-700">{row.prevBultos}</TableCell>
+                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.prevCodPro}</TableCell>
+                                    <TableCell className="text-center px-1">
+                                      <div className="flex items-center justify-center gap-0.5">
+                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.prevZonSts || '?'}</span>
+                                        <ArrowRight className={`h-3 w-3 ${sameZone ? 'text-slate-300' : 'text-amber-500'}`} />
+                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.currZonSts || '?'}</span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      <span className="text-xs font-bold px-2 py-1 rounded bg-red-500 text-white whitespace-nowrap">{fmtDur(row.gapSeconds)}</span>
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono text-muted-foreground bg-green-50/50">{row.currHora}</TableCell>
+                                    <TableCell className="text-xs bg-green-50/50">
+                                      <span className="inline-block px-1.5 py-0.5 rounded bg-green-200 text-green-800 text-[10px] font-semibold">{row.currZonSts || '—'}</span>
+                                    </TableCell>
+                                    <TableCell className="text-xs text-center font-semibold bg-green-50/50 text-green-700">{row.currBultos}</TableCell>
+                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-green-50/50 max-w-[110px] truncate">{row.currCodPro}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                          <span className="text-xs text-muted-foreground">Página {stdGapPage} de {stdGapTotalPages} ({stdGapTotal} gaps)</span>
+                          <div className="flex items-center gap-1">
+                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={stdGapPage <= 1} onClick={() => setStdGapPage(p => p - 1)}><ChevronLeft className="h-3 w-3" /></Button>
+                            <span className="text-xs px-2">{stdGapPage} / {stdGapTotalPages}</span>
+                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={stdGapPage >= stdGapTotalPages} onClick={() => setStdGapPage(p => p + 1)}><ChevronRight className="h-3 w-3" /></Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            )}
+
+            {/* ===================== PREP XD TAB ===================== */}
+            {activeTab === 'prep-xd' && (
+              xdSelectedOp === 'all' ? (
+                xdStats && xdStats.byOperator.length > 0 ? (
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <h3 className="text-sm font-semibold text-purple-700">Ranking Preparación XD</h3>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            onClick={() => {
+                              const params = new URLSearchParams();
+                              params.set('zona', 'xd');
+                              if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+                              if (selectedDate !== 'all') params.set('fecha', selectedDate);
+                              window.open(`/api/export-ranking?${params}`, '_blank');
+                            }}
+                          >
+                            <Download className="h-3 w-3" />
+                            <span className="hidden sm:inline">Descargar Excel</span>
+                          </Button>
+                          <span className="text-xs text-muted-foreground">{xdStats.byOperator.length} operadores</span>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-xs w-12 text-center">#</TableHead>
+                              <TableHead className="text-xs">Operador</TableHead>
+                              <TableHead className="text-xs text-center">Turno</TableHead>
+                              <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
+                              <TableHead className="text-xs text-right">Descanso</TableHead>
+                              <TableHead className="text-xs text-right">T. Muerto Inf.</TableHead>
+                              <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
+                              <TableHead className="text-xs text-center">Dias</TableHead>
+                              <TableHead className="text-xs text-right">Bultos</TableHead>
+                              <TableHead className="text-xs text-right">Eventos</TableHead>
+                              <TableHead className="text-xs text-right">Mayor Gap</TableHead>
+                              <TableHead className="text-xs w-10"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {xdStats.byOperator.map((op, i) => {
+                              const isTop3 = i < 3;
+                              return (
+                                <TableRow key={`xd-${op.codUti}`}
+                                  className={`${isTop3 ? 'bg-purple-50 hover:bg-purple-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+                                  onClick={() => { setXdSelectedOp(op.codUti); setXdGapPage(1); }}
+                                >
+                                  <TableCell className="text-center">
+                                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                      isTop3 ? 'bg-purple-500 text-white' : i < 10 ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-muted-foreground'
+                                    }`}>{i + 1}</span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="text-xs font-medium">{op.nomUti}</div>
+                                    <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+                                  </TableCell>
+                                  <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
+                                  <TableCell className="text-xs text-right font-bold text-purple-600">{fmtDur(op.totalMinSec)}</TableCell>
+                                  <TableCell className="text-right">
+                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{op.descansoMin > 0 ? `-${fmtDur(op.descansoMinSec)}` : '—'}</span>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
+                                      {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
+                                    </span>
+                                    {op.tmInfEventos > 0 && <div className="text-[9px] text-purple-500 text-center">{op.tmInfEventos} ev.</div>}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-right font-bold text-green-700">{fmtDur(op.totalNetoMinSec)}</TableCell>
+                                  <TableCell className="text-xs text-center text-muted-foreground">{op.diasTrabajados}</TableCell>
+                                  <TableCell className="text-xs text-right font-medium">{op.totalBultos.toLocaleString('es-AR')}</TableCell>
+                                  <TableCell className="text-xs text-right">{op.events}</TableCell>
+                                  <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
+                                  <TableCell className="text-center"><span className="text-[10px] text-muted-foreground">ver</span></TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="flex flex-col items-center py-12">
+                      <Package className="h-10 w-10 text-purple-200 mb-3" />
+                      <p className="text-sm text-muted-foreground">Sin datos para Preparación XD (zonas con V)</p>
+                    </CardContent>
+                  </Card>
+                )
+              ) : (
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => { setXdSelectedOp('all'); }}>
+                          <ChevronLeft className="h-3 w-3" /> XD
+                        </Button>
+                        <h3 className="text-sm font-semibold text-purple-700">
+                          {xdStats?.byOperator.find(o => o.codUti === xdSelectedOp)?.nomUti || xdSelectedOp}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => {
+                            const params = new URLSearchParams();
+                            params.set('zona', 'xd');
+                            params.set('operator', xdSelectedOp);
+                            if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+                            if (selectedDate !== 'all') params.set('fecha', selectedDate);
+                            window.open(`/api/export-operator?${params}`, '_blank');
+                          }}
+                        >
+                          <Download className="h-3 w-3" />
+                          <span className="hidden sm:inline">Descargar Excel</span>
+                        </Button>
+                        <span className="text-xs text-muted-foreground">{xdGapTotal} gaps &gt;5 min</span>
+                      </div>
+                    </div>
+                    {xdGapLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+                      </div>
+                    ) : xdGaps.length === 0 ? (
+                      <div className="text-center py-12 text-sm text-muted-foreground">No se encontraron gaps mayores a 5 minutos</div>
+                    ) : (
+                      <>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-xs w-10 text-center">#</TableHead>
+                                <TableHead className="text-xs">Fecha</TableHead>
+                                <TableHead className="text-xs text-center w-14">Turno</TableHead>
+                                <TableHead className="text-xs text-center bg-blue-50" colSpan={4}>Pickeo Previo</TableHead>
+                                <TableHead className="text-xs text-center">Trayecto</TableHead>
+                                <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
+                                <TableHead className="text-xs text-center bg-green-50" colSpan={4}>Pickeo Posterior</TableHead>
+                              </TableRow>
+                              <TableRow>
+                                <TableHead className="text-[10px]"></TableHead>
+                                <TableHead className="text-[10px]"></TableHead>
+                                <TableHead className="text-[10px]"></TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Bultos</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground">Zona → Zona</TableHead>
+                                <TableHead className="text-[10px]"></TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Bultos</TableHead>
+                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {xdGaps.map((row) => {
+                                const isTop3 = row.rank <= 3;
+                                const sameZone = row.prevZonSts === row.currZonSts;
+                                return (
+                                  <TableRow key={`xd-${row.fecha}-${row.prevHora}-${row.currHora}`}
+                                    className={isTop3 ? 'bg-purple-50 hover:bg-purple-100/70' : ''}>
+                                    <TableCell className="text-center">
+                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                        isTop3 ? 'bg-purple-500 text-white' : 'bg-slate-100 text-muted-foreground'
+                                      }`}>{row.rank}</span>
+                                    </TableCell>
+                                    <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+                                    <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
+                                    <TableCell className="text-xs font-mono text-muted-foreground bg-blue-50/50">{row.prevHora}</TableCell>
+                                    <TableCell className="text-xs bg-blue-50/50">
+                                      <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.prevZonSts || '—'}</span>
+                                    </TableCell>
+                                    <TableCell className="text-xs text-center font-semibold bg-blue-50/50 text-blue-700">{row.prevBultos}</TableCell>
+                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.prevCodPro}</TableCell>
+                                    <TableCell className="text-center px-1">
+                                      <div className="flex items-center justify-center gap-0.5">
+                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.prevZonSts || '?'}</span>
+                                        <ArrowRight className={`h-3 w-3 ${sameZone ? 'text-slate-300' : 'text-amber-500'}`} />
+                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.currZonSts || '?'}</span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      <span className="text-xs font-bold px-2 py-1 rounded bg-red-500 text-white whitespace-nowrap">{fmtDur(row.gapSeconds)}</span>
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono text-muted-foreground bg-green-50/50">{row.currHora}</TableCell>
+                                    <TableCell className="text-xs bg-green-50/50">
+                                      <span className="inline-block px-1.5 py-0.5 rounded bg-green-200 text-green-800 text-[10px] font-semibold">{row.currZonSts || '—'}</span>
+                                    </TableCell>
+                                    <TableCell className="text-xs text-center font-semibold bg-green-50/50 text-green-700">{row.currBultos}</TableCell>
+                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-green-50/50 max-w-[110px] truncate">{row.currCodPro}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                          <span className="text-xs text-muted-foreground">Página {xdGapPage} de {xdGapTotalPages} ({xdGapTotal} gaps)</span>
+                          <div className="flex items-center gap-1">
+                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={xdGapPage <= 1} onClick={() => setXdGapPage(p => p - 1)}><ChevronLeft className="h-3 w-3" /></Button>
+                            <span className="text-xs px-2">{xdGapPage} / {xdGapTotalPages}</span>
+                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={xdGapPage >= xdGapTotalPages} onClick={() => setXdGapPage(p => p + 1)}><ChevronRight className="h-3 w-3" /></Button>
                           </div>
                         </div>
                       </>
