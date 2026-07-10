@@ -1198,6 +1198,25 @@ export default function DashboardPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+                          onClick={() => {
+                            const params = new URLSearchParams();
+                            const opStat = stdStats?.byOperator.find(o => o.codUti === stdSelectedOp);
+                            params.set('codUti', stdSelectedOp);
+                            params.set('nomUti', opStat?.nomUti || '');
+                            params.set('turno', opStat?.turno || '');
+                            params.set('tiempoNetoMin', String(opStat?.totalNetoMin || 0));
+                            params.set('tiempoBrutoMin', String(opStat?.totalMin || 0));
+                            params.set('descansoMin', String(opStat?.descansoMin || 0));
+                            window.open(`/sanciones?${params}`, '_blank');
+                          }}
+                        >
+                          <Shield className="h-3 w-3" />
+                          Sanción
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="h-7 text-xs gap-1"
                           onClick={() => {
                             const params = new URLSearchParams();
@@ -1416,6 +1435,25 @@ export default function DashboardPage() {
                         </h3>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+                          onClick={() => {
+                            const params = new URLSearchParams();
+                            const opStat = xdStats?.byOperator.find(o => o.codUti === xdSelectedOp);
+                            params.set('codUti', xdSelectedOp);
+                            params.set('nomUti', opStat?.nomUti || '');
+                            params.set('turno', opStat?.turno || '');
+                            params.set('tiempoNetoMin', String(opStat?.totalNetoMin || 0));
+                            params.set('tiempoBrutoMin', String(opStat?.totalMin || 0));
+                            params.set('descansoMin', String(opStat?.descansoMin || 0));
+                            window.open(`/sanciones?${params}`, '_blank');
+                          }}
+                        >
+                          <Shield className="h-3 w-3" />
+                          Sanción
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
