@@ -242,9 +242,14 @@ async function ensureTables() {
         "comentariosColaborador" TEXT,
         "comentariosCoordinador" TEXT,
         "sugerencias" TEXT,
+        "bultos" INTEGER,
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    // Add bultos column if missing (for existing tables)
+    try {
+      await tursoQuery(`ALTER TABLE "Sancion" ADD COLUMN "bultos" INTEGER`);
+    } catch { /* column already exists */ }
     await tursoQuery(`
       CREATE TABLE IF NOT EXISTS "Indicador" (
         "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

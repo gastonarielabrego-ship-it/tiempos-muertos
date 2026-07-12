@@ -26,6 +26,7 @@ export async function GET() {
       comentariosColaborador: r.comentariosColaborador ? String(r.comentariosColaborador) : null,
       comentariosCoordinador: r.comentariosCoordinador ? String(r.comentariosCoordinador) : null,
       sugerencias: r.sugerencias ? String(r.sugerencias) : null,
+      bultos: r.bultos ? Number(r.bultos) : null,
       createdAt: r.createdAt ? String(r.createdAt) : null,
     }));
 
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { codUti, nomUti, turno, tiempoNeto, fechaMedicion, coordinador, sectorCoordinador, rrhh, evidencia, comentariosColaborador, comentariosCoordinador, sugerencias } = body;
+    const { codUti, nomUti, turno, tiempoNeto, bultos, fechaMedicion, coordinador, sectorCoordinador, rrhh, evidencia, comentariosColaborador, comentariosCoordinador, sugerencias } = body;
 
     if (!codUti || !nomUti) {
       return NextResponse.json({ error: 'codUti y nomUti son requeridos' }, { status: 400 });
@@ -65,13 +66,14 @@ export async function POST(request: NextRequest) {
     const toStr = (v: unknown) => (v !== null && v !== undefined && v !== '') ? String(v) : '';
 
     await tursoQuery(
-      `INSERT INTO "Sancion" ("codUti","nomUti","turno","tiempoNeto","fechaMedicion","coordinador","sectorCoordinador","rrhh","evidencia","comentariosColaborador","comentariosCoordinador","sugerencias")
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO "Sancion" ("codUti","nomUti","turno","tiempoNeto","bultos","fechaMedicion","coordinador","sectorCoordinador","rrhh","evidencia","comentariosColaborador","comentariosCoordinador","sugerencias")
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         String(codUti),
         String(nomUti),
         toStr(turno),
         tiempoNeto !== null && tiempoNeto !== undefined ? Number(tiempoNeto) : null,
+        bultos !== null && bultos !== undefined ? Number(bultos) : null,
         toStr(fechaMedicion),
         toStr(coordinador),
         toStr(sectorCoordinador),

@@ -32,7 +32,7 @@ export async function GET() {
 
     // --- Sheet 1: Historial Sanciones ---
     const h1Header = [
-      '#', 'Fecha Registro', 'Legajo', 'Nombre', 'Turno',
+      '#', 'Fecha Registro', 'Legajo', 'Nombre', 'Turno', 'Bultos',
       'T. Neto (min)', 'Fecha Medición', 'Coordinador', 'Sector',
       'RRHH', 'TM Inf. (min)', 'Ev. TM Inf.',
       'Coment. Colaborador', 'Coment. Coordinador',
@@ -47,6 +47,7 @@ export async function GET() {
         cod,
         String(r.nomUti),
         r.turno ? String(r.turno) : '',
+        r.bultos ? Number(r.bultos) : 0,
         r.tiempoNeto ? Number(r.tiempoNeto) : 0,
         r.fechaMedicion ? String(r.fechaMedicion) : '',
         r.coordinador ? String(r.coordinador) : '',
@@ -61,7 +62,7 @@ export async function GET() {
 
     const ws1 = XLSX.utils.aoa_to_sheet([h1Header, ...h1Rows]);
     ws1['!cols'] = [
-      { wch: 4 }, { wch: 18 }, { wch: 12 }, { wch: 28 }, { wch: 8 },
+      { wch: 4 }, { wch: 18 }, { wch: 12 }, { wch: 28 }, { wch: 8 }, { wch: 10 },
       { wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 16 },
       { wch: 16 }, { wch: 14 }, { wch: 12 },
       { wch: 30 }, { wch: 30 },

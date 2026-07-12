@@ -77,6 +77,7 @@ export default function SancionesForm() {
   const tiempoNetoMin = searchParams.get('tiempoNetoMin') || '0';
   const tiempoBrutoMin = searchParams.get('tiempoBrutoMin') || '0';
   const descansoMin = searchParams.get('descansoMin') || '0';
+  const bultos = searchParams.get('bultos') || '0';
   const fechaMedicion = searchParams.get('fechaMedicion') || '';
 
   function minToHM(min: number): string {
@@ -135,6 +136,7 @@ export default function SancionesForm() {
     const body = {
       codUti, nomUti, turno,
       tiempoNeto: Number(tiempoNetoMin),
+      bultos: Number(bultos) || 0,
       fechaMedicion: (document.getElementById('fechaEmision') as HTMLInputElement)?.value || fechaMedicion || new Date().toISOString().split('T')[0],
       coordinador: (document.getElementById('coordNombre') as HTMLInputElement)?.value || '',
       sectorCoordinador: (document.getElementById('coordSector') as HTMLInputElement)?.value || '',
@@ -382,7 +384,13 @@ export default function SancionesForm() {
 
             {/* Summary stats: Bruto / Descanso / TM Informado / Neto */}
             <div className="px-3 py-2 border-b border-slate-300 bg-slate-50/50">
-              <div className="grid grid-cols-4 gap-3 text-center">
+              <div className="grid grid-cols-5 gap-3 text-center">
+                <div>
+                  <p className="text-[9px] text-slate-500 uppercase tracking-wide">Bultos</p>
+                  <p className="text-base font-bold text-slate-800 print:text-[14pt]">
+                    {Number(bultos).toLocaleString('es-AR')}
+                  </p>
+                </div>
                 <div>
                   <p className="text-[9px] text-slate-500 uppercase tracking-wide">Tiempo Bruto</p>
                   <p className="text-base font-bold text-red-600 print:text-[14pt]">
