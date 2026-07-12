@@ -758,6 +758,11 @@ export default function DashboardPage() {
                     </Button>
                   </div>
                   <div className="space-y-1.5 text-sm">
+                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-slate-200">
+                      <span className="text-[10px] text-muted-foreground">Bultos</span>
+                      <span className="text-xs text-right font-bold text-slate-800">{(selectedOpStats.totalBultos || 0).toLocaleString('es-AR')}</span>
+                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.diasTrabajados} días</span>
+                    </div>
                     <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-red-100">
                       <span className="text-[10px] text-muted-foreground">Tiempo Muerto</span>
                       <span className="text-xs text-right font-bold text-red-600">{fmtDur(selectedOpStats.totalMinSec)}</span>
@@ -1244,6 +1249,30 @@ export default function DashboardPage() {
                       <div className="text-center py-12 text-sm text-muted-foreground">No se encontraron gaps mayores a 5 minutos</div>
                     ) : (
                       <>
+                        {(() => {
+                          const opStat = stdStats?.byOperator.find(o => o.codUti === stdSelectedOp);
+                          if (!opStat) return null;
+                          return (
+                            <div className="grid grid-cols-4 gap-3 text-center text-xs mb-3 p-2 bg-blue-50/60 rounded-lg border border-blue-100">
+                              <div>
+                                <p className="text-[9px] text-slate-500 uppercase">Bultos</p>
+                                <p className="font-bold text-slate-800">{(opStat.totalBultos || 0).toLocaleString('es-AR')}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-slate-500 uppercase">T. Bruto</p>
+                                <p className="font-bold text-red-600">{opStat.totalMin} min</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-slate-500 uppercase">Descanso</p>
+                                <p className="font-bold text-slate-500">{opStat.descansoMin > 0 ? `${opStat.descansoMin} min` : '—'}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-slate-500 uppercase">T. Neto</p>
+                                <p className="font-bold text-green-700">{opStat.totalNetoMin} min</p>
+                              </div>
+                            </div>
+                          );
+                        })()}
                         <div className="overflow-x-auto">
                           <Table>
                             <TableHeader>
@@ -1485,6 +1514,30 @@ export default function DashboardPage() {
                       <div className="text-center py-12 text-sm text-muted-foreground">No se encontraron gaps mayores a 5 minutos</div>
                     ) : (
                       <>
+                        {(() => {
+                          const opStat = xdStats?.byOperator.find(o => o.codUti === xdSelectedOp);
+                          if (!opStat) return null;
+                          return (
+                            <div className="grid grid-cols-4 gap-3 text-center text-xs mb-3 p-2 bg-purple-50/60 rounded-lg border border-purple-100">
+                              <div>
+                                <p className="text-[9px] text-slate-500 uppercase">Bultos</p>
+                                <p className="font-bold text-slate-800">{(opStat.totalBultos || 0).toLocaleString('es-AR')}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-slate-500 uppercase">T. Bruto</p>
+                                <p className="font-bold text-red-600">{opStat.totalMin} min</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-slate-500 uppercase">Descanso</p>
+                                <p className="font-bold text-slate-500">{opStat.descansoMin > 0 ? `${opStat.descansoMin} min` : '—'}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-slate-500 uppercase">T. Neto</p>
+                                <p className="font-bold text-green-700">{opStat.totalNetoMin} min</p>
+                              </div>
+                            </div>
+                          );
+                        })()}
                         <div className="overflow-x-auto">
                           <Table>
                             <TableHeader>
