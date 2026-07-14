@@ -14,6 +14,8 @@ interface GapItem {
   currZonSts: string | null;
   prevCodPro: string;
   currCodPro: string;
+  prevBultos: number;
+  currBultos: number;
 }
 
 interface TmInfData { totalMinutos: number; registros: number; }
@@ -77,7 +79,6 @@ export default function SancionesForm() {
   const tiempoNetoMin = searchParams.get('tiempoNetoMin') || '0';
   const tiempoBrutoMin = searchParams.get('tiempoBrutoMin') || '0';
   const descansoMin = searchParams.get('descansoMin') || '0';
-  const bultos = searchParams.get('bultos') || '0';
   const fechaMedicion = searchParams.get('fechaMedicion') || '';
 
   function minToHM(min: number): string {
@@ -107,6 +108,7 @@ export default function SancionesForm() {
             fecha: r.fecha, prevHora: r.prevHora, currHora: r.currHora,
             gapSeconds: r.gapSeconds, prevZonSts: r.prevZonSts, currZonSts: r.currZonSts,
             prevCodPro: r.prevCodPro || '', currCodPro: r.currCodPro || '',
+            prevBultos: r.prevBultos || 0, currBultos: r.currBultos || 0,
           })));
         }
         if (tmInfRes.ok) {
@@ -136,7 +138,6 @@ export default function SancionesForm() {
     const body = {
       codUti, nomUti, turno,
       tiempoNeto: Number(tiempoNetoMin),
-      bultos: Number(bultos) || 0,
       fechaMedicion: (document.getElementById('fechaEmision') as HTMLInputElement)?.value || fechaMedicion || new Date().toISOString().split('T')[0],
       coordinador: (document.getElementById('coordNombre') as HTMLInputElement)?.value || '',
       sectorCoordinador: (document.getElementById('coordSector') as HTMLInputElement)?.value || '',
@@ -384,13 +385,7 @@ export default function SancionesForm() {
 
             {/* Summary stats: Bruto / Descanso / TM Informado / Neto */}
             <div className="px-3 py-2 border-b border-slate-300 bg-slate-50/50">
-              <div className="grid grid-cols-5 gap-3 text-center">
-                <div>
-                  <p className="text-[9px] text-slate-500 uppercase tracking-wide">Bultos</p>
-                  <p className="text-base font-bold text-slate-800 print:text-[14pt]">
-                    {Number(bultos).toLocaleString('es-AR')}
-                  </p>
-                </div>
+              <div className="grid grid-cols-4 gap-3 text-center">
                 <div>
                   <p className="text-[9px] text-slate-500 uppercase tracking-wide">Tiempo Bruto</p>
                   <p className="text-base font-bold text-red-600 print:text-[14pt]">
@@ -429,10 +424,10 @@ export default function SancionesForm() {
                   rows={Math.min(gaps.length + 3, 18)}
                   readOnly
                   value={
-                    '#  Fecha       | Hora Inicio | Hora Fin   | Duracion  | Zona Origen -> Destino | Producto\n' +
-                    '---|------------|-------------|------------|-----------|------------------------|----------\n' +
+                    '#  Fecha       | Hora Inicio | Hora Fin   | Duracion  | Bul.Ant | Bul.Pos | Zona O. -> Zona D. | Producto\n' +
+                    '---|------------|-------------|------------|-----------|---------|---------|--------------------|----------\n' +
                     gaps.map((g, i) =>
-                      `${String(i + 1).padStart(2)}  ${g.fecha} | ${g.prevHora}    | ${g.currHora}    | ${fmtSec(g.gapSeconds).padEnd(9)} | ${(g.prevZonSts || '?').padEnd(12)} -> ${(g.currZonSts || '?').padEnd(-12)} | ${g.prevCodPro}`
+                      `${String(i + 1).padStart(2)}  ${g.fecha} | ${g.prevHora}    | ${g.currHora}    | ${fmtSec(g.gapSeconds).padEnd(9)} | ${String(g.prevBultos).padEnd(6)} | ${String(g.currBultos).padEnd(6)} | ${(g.prevZonSts || '?').padEnd(8)} -> ${(g.currZonSts || '?').padEnd(8)} | ${g.prevCodPro}`
                     ).join('\n')
                   }
                 />
@@ -452,6 +447,8 @@ export default function SancionesForm() {
                       <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Inicio</th>
                       <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Fin</th>
                       <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Duracion</th>
+                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Bul.Ant</th>
+                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Bul.Pos</th>
                       <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Zona O.</th>
                       <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Zona D.</th>
                       <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'left' }}>Producto</th>
@@ -465,6 +462,8 @@ export default function SancionesForm() {
                         <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.prevHora}</td>
                         <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.currHora}</td>
                         <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center', fontWeight: 'bold' }}>{fmtSec(g.gapSeconds)}</td>
+                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.prevBultos}</td>
+                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.currBultos}</td>
                         <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.prevZonSts || '-'}</td>
                         <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.currZonSts || '-'}</td>
                         <td style={{ border: '1px solid #ddd', padding: '1px 3px' }}>{g.prevCodPro}</td>

@@ -749,7 +749,6 @@ export default function DashboardPage() {
                         params.set('tiempoNetoMin', String(selectedOpStats.totalNetoMin));
                         params.set('tiempoBrutoMin', String(selectedOpStats.totalMin));
                         params.set('descansoMin', String(selectedOpStats.descansoMin));
-                        params.set('bultos', String(selectedOpStats.totalBultos || 0));
                         window.open(`/sanciones?${params}`, '_blank');
                       }}
                     >
@@ -1214,7 +1213,7 @@ export default function DashboardPage() {
                             params.set('tiempoNetoMin', String(opStat?.totalNetoMin || 0));
                             params.set('tiempoBrutoMin', String(opStat?.totalMin || 0));
                             params.set('descansoMin', String(opStat?.descansoMin || 0));
-                            params.set('bultos', String(opStat?.totalBultos || 0));
+
                             window.open(`/sanciones?${params}`, '_blank');
                           }}
                         >
@@ -1479,7 +1478,7 @@ export default function DashboardPage() {
                             params.set('tiempoNetoMin', String(opStat?.totalNetoMin || 0));
                             params.set('tiempoBrutoMin', String(opStat?.totalMin || 0));
                             params.set('descansoMin', String(opStat?.descansoMin || 0));
-                            params.set('bultos', String(opStat?.totalBultos || 0));
+
                             window.open(`/sanciones?${params}`, '_blank');
                           }}
                         >
