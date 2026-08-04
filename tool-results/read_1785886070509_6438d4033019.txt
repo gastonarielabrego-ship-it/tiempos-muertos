@@ -1,0 +1,402 @@
+   943→                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
+   944→                                  {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
+   945→                                </span>
+   946→                                {op.tmInfEventos > 0 && <div className="text-[9px] text-purple-500 text-center">{op.tmInfEventos} ev.</div>}
+   947→                              </TableCell>
+   948→                              <TableCell className="text-xs text-right font-bold">
+   949→                                <span className="text-green-700">
+   950→                                  {fmtDur(op.totalNetoMinSec)}
+   951→                                </span>
+   952→                              </TableCell>
+   953→                              <TableCell className="text-xs text-center text-muted-foreground">{op.diasTrabajados}</TableCell>
+   954→                              <TableCell className="text-xs text-right font-medium">{op.totalBultos.toLocaleString('es-AR')}</TableCell>
+   955→                              <TableCell className="text-xs text-right">{op.events}</TableCell>
+   956→                              <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
+   957→                              <TableCell className="text-center"><span className="text-[10px] text-muted-foreground">ver</span></TableCell>
+   958→                            </TableRow>
+   959→                          );
+   960→                        })}
+   961→                      </TableBody>
+   962→                    </Table>
+   963→                  </div>
+   964→                </CardContent>
+   965→              </Card>
+   966→            )}
+   967→
+   968→            {/* ===================== POR OPERADOR TAB ===================== */}
+   969→            {activeTab === 'operador' && (
+   970→              selectedOp === 'all' ? (
+   971→                <Card>
+   972→                  <CardContent className="flex flex-col items-center py-12">
+   973→                    <User className="h-10 w-10 text-muted-foreground/30 mb-3" />
+   974→                    <p className="text-sm text-muted-foreground">Seleccioná un operador del ranking o del filtro para ver sus eventos</p>
+   975→                  </CardContent>
+   976→                </Card>
+   977→              ) : (
+   978→                <Card>
+   979→                  <CardContent className="p-4">
+   980→                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+   981→                      <h3 className="text-sm font-semibold">Eventos de {selectedOpName}</h3>
+   982→                      <div className="flex items-center gap-2">
+   983→                        <Button
+   984→                          variant="outline"
+   985→                          size="sm"
+   986→                          className="h-7 text-xs gap-1"
+   987→                          onClick={() => {
+   988→                            const params = new URLSearchParams();
+   989→                            params.set('operator', selectedOp);
+   990→                            if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+   991→                            if (selectedDate !== 'all') params.set('fecha', selectedDate);
+   992→                            window.open(`/api/export-operator?${params}`, '_blank');
+   993→                          }}
+   994→                        >
+   995→                          <Download className="h-3 w-3" />
+   996→                          <span className="hidden sm:inline">Descargar Excel</span>
+   997→                        </Button>
+   998→                        <span className="text-xs text-muted-foreground">{gapTotal} gaps &gt;5 min</span>
+   999→                      </div>
+  1000→                    </div>
+  1001→                    {gapLoading ? (
+  1002→                      <div className="flex items-center justify-center py-12">
+  1003→                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  1004→                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+  1005→                      </div>
+  1006→                    ) : gaps.length === 0 ? (
+  1007→                      <div className="text-center py-12 text-sm text-muted-foreground">No se encontraron gaps mayores a 5 minutos</div>
+  1008→                    ) : (
+  1009→                      <>
+  1010→                        <div className="overflow-x-auto">
+  1011→                          <Table>
+  1012→                            <TableHeader>
+  1013→                              <TableRow>
+  1014→                                <TableHead className="text-xs w-10 text-center">#</TableHead>
+  1015→                                <TableHead className="text-xs">Fecha</TableHead>
+  1016→                                <TableHead className="text-xs text-center w-14">Turno</TableHead>
+  1017→                                <TableHead className="text-xs text-center bg-blue-50" colSpan={4}>Pickeo Previo</TableHead>
+  1018→                                <TableHead className="text-xs text-center">Trayecto</TableHead>
+  1019→                                <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
+  1020→                                <TableHead className="text-xs text-center bg-green-50" colSpan={4}>Pickeo Posterior</TableHead>
+  1021→                              </TableRow>
+  1022→                              <TableRow>
+  1023→                                <TableHead className="text-[10px]"></TableHead>
+  1024→                                <TableHead className="text-[10px]"></TableHead>
+  1025→                                <TableHead className="text-[10px]"></TableHead>
+  1026→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
+  1027→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+  1028→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Bultos</TableHead>
+  1029→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
+  1030→                                <TableHead className="text-[10px] text-muted-foreground">Zona → Zona</TableHead>
+  1031→                                <TableHead className="text-[10px]"></TableHead>
+  1032→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
+  1033→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+  1034→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Bultos</TableHead>
+  1035→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
+  1036→                              </TableRow>
+  1037→                            </TableHeader>
+  1038→                            <TableBody>
+  1039→                              {gaps.map((row) => {
+  1040→                                const isTop3 = row.rank <= 3;
+  1041→                                const sameZone = row.prevZonSts === row.currZonSts;
+  1042→                                return (
+  1043→                                  <TableRow key={`${row.fecha}-${row.prevHora}-${row.currHora}`}
+  1044→                                    className={isTop3 ? 'bg-red-50 hover:bg-red-100/70' : ''}>
+  1045→                                    <TableCell className="text-center">
+  1046→                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+  1047→                                        isTop3 ? 'bg-red-500 text-white' : 'bg-slate-100 text-muted-foreground'
+  1048→                                      }`}>{row.rank}</span>
+  1049→                                    </TableCell>
+  1050→                                    <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+  1051→                                    <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
+  1052→                                    <TableCell className="text-xs font-mono text-muted-foreground bg-blue-50/50">{row.prevHora}</TableCell>
+  1053→                                    <TableCell className="text-xs bg-blue-50/50">
+  1054→                                      <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.prevZonSts || '—'}</span>
+  1055→                                    </TableCell>
+  1056→                                    <TableCell className="text-xs text-center font-semibold bg-blue-50/50 text-blue-700">{row.prevBultos}</TableCell>
+  1057→                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.prevCodPro}</TableCell>
+  1058→                                    <TableCell className="text-center px-1">
+  1059→                                      <div className="flex items-center justify-center gap-0.5">
+  1060→                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.prevZonSts || '?'}</span>
+  1061→                                        <ArrowRight className={`h-3 w-3 ${sameZone ? 'text-slate-300' : 'text-amber-500'}`} />
+  1062→                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.currZonSts || '?'}</span>
+  1063→                                      </div>
+  1064→                                    </TableCell>
+  1065→                                    <TableCell className="text-center">
+  1066→                                      <span className="text-xs font-bold px-2 py-1 rounded bg-red-500 text-white whitespace-nowrap">{fmtDur(row.gapSeconds)}</span>
+  1067→                                    </TableCell>
+  1068→                                    <TableCell className="text-xs font-mono text-muted-foreground bg-green-50/50">{row.currHora}</TableCell>
+  1069→                                    <TableCell className="text-xs bg-green-50/50">
+  1070→                                      <span className="inline-block px-1.5 py-0.5 rounded bg-green-200 text-green-800 text-[10px] font-semibold">{row.currZonSts || '—'}</span>
+  1071→                                    </TableCell>
+  1072→                                    <TableCell className="text-xs text-center font-semibold bg-green-50/50 text-green-700">{row.currBultos}</TableCell>
+  1073→                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-green-50/50 max-w-[110px] truncate">{row.currCodPro}</TableCell>
+  1074→                                  </TableRow>
+  1075→                                );
+  1076→                              })}
+  1077→                            </TableBody>
+  1078→                          </Table>
+  1079→                        </div>
+  1080→                        <div className="flex items-center justify-between mt-3 pt-3 border-t">
+  1081→                          <span className="text-xs text-muted-foreground">Página {gapPage} de {gapTotalPages} ({gapTotal} gaps)</span>
+  1082→                          <div className="flex items-center gap-1">
+  1083→                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage <= 1} onClick={() => fetchGaps(gapPage - 1)}><ChevronLeft className="h-3 w-3" /></Button>
+  1084→                            <span className="text-xs px-2">{gapPage} / {gapTotalPages}</span>
+  1085→                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage >= gapTotalPages} onClick={() => fetchGaps(gapPage + 1)}><ChevronRight className="h-3 w-3" /></Button>
+  1086→                          </div>
+  1087→                        </div>
+  1088→                      </>
+  1089→                    )}
+  1090→                  </CardContent>
+  1091→                </Card>
+  1092→              )
+  1093→            )}
+  1094→
+  1095→            {/* ===================== PREP STD TAB ===================== */}
+  1096→            {activeTab === 'prep-std' && (
+  1097→              stdSelectedOp === 'all' ? (
+  1098→                stdStats && stdStats.byOperator.length > 0 ? (
+  1099→                  <Card>
+  1100→                    <CardContent className="p-4">
+  1101→                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+  1102→                        <h3 className="text-sm font-semibold text-blue-700">Ranking Preparación STD</h3>
+  1103→                        <div className="flex items-center gap-2">
+  1104→                          <Button
+  1105→                            variant="outline"
+  1106→                            size="sm"
+  1107→                            className="h-7 text-xs gap-1"
+  1108→                            onClick={() => {
+  1109→                              const params = new URLSearchParams();
+  1110→                              params.set('zona', 'std');
+  1111→                              if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+  1112→                              if (selectedDate !== 'all') params.set('fecha', selectedDate);
+  1113→                              window.open(`/api/export-ranking?${params}`, '_blank');
+  1114→                            }}
+  1115→                          >
+  1116→                            <Download className="h-3 w-3" />
+  1117→                            <span className="hidden sm:inline">Descargar Excel</span>
+  1118→                          </Button>
+  1119→                          <span className="text-xs text-muted-foreground">{stdStats.byOperator.length} operadores</span>
+  1120→                        </div>
+  1121→                      </div>
+  1122→                      <div className="overflow-x-auto">
+  1123→                        <Table>
+  1124→                          <TableHeader>
+  1125→                            <TableRow>
+  1126→                              <TableHead className="text-xs w-12 text-center">#</TableHead>
+  1127→                              <TableHead className="text-xs">Operador</TableHead>
+  1128→                              <TableHead className="text-xs text-center">Turno</TableHead>
+  1129→                              <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
+  1130→                              <TableHead className="text-xs text-right">Descanso</TableHead>
+  1131→                              <TableHead className="text-xs text-right">T. Muerto Inf.</TableHead>
+  1132→                              <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
+  1133→                              <TableHead className="text-xs text-center">Dias</TableHead>
+  1134→                              <TableHead className="text-xs text-right">Bultos</TableHead>
+  1135→                              <TableHead className="text-xs text-right">Eventos</TableHead>
+  1136→                              <TableHead className="text-xs text-right">Mayor Gap</TableHead>
+  1137→                              <TableHead className="text-xs w-10"></TableHead>
+  1138→                            </TableRow>
+  1139→                          </TableHeader>
+  1140→                          <TableBody>
+  1141→                            {stdStats.byOperator.map((op, i) => {
+  1142→                              const isTop3 = i < 3;
+  1143→                              return (
+  1144→                                <TableRow key={`std-${op.codUti}`}
+  1145→                                  className={`${isTop3 ? 'bg-blue-50 hover:bg-blue-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+  1146→                                  onClick={() => { setStdSelectedOp(op.codUti); setStdGapPage(1); }}
+  1147→                                >
+  1148→                                  <TableCell className="text-center">
+  1149→                                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+  1150→                                      isTop3 ? 'bg-blue-500 text-white' : i < 10 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-muted-foreground'
+  1151→                                    }`}>{i + 1}</span>
+  1152→                                  </TableCell>
+  1153→                                  <TableCell>
+  1154→                                    <div className="text-xs font-medium">{op.nomUti}</div>
+  1155→                                    <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+  1156→                                  </TableCell>
+  1157→                                  <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
+  1158→                                  <TableCell className="text-xs text-right font-bold text-blue-600">{fmtDur(op.totalMinSec)}</TableCell>
+  1159→                                  <TableCell className="text-right">
+  1160→                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{op.descansoMin > 0 ? `-${fmtDur(op.descansoMinSec)}` : '—'}</span>
+  1161→                                  </TableCell>
+  1162→                                  <TableCell className="text-right">
+  1163→                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
+  1164→                                      {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
+  1165→                                    </span>
+  1166→                                    {op.tmInfEventos > 0 && <div className="text-[9px] text-purple-500 text-center">{op.tmInfEventos} ev.</div>}
+  1167→                                  </TableCell>
+  1168→                                  <TableCell className="text-xs text-right font-bold text-green-700">{fmtDur(op.totalNetoMinSec)}</TableCell>
+  1169→                                  <TableCell className="text-xs text-center text-muted-foreground">{op.diasTrabajados}</TableCell>
+  1170→                                  <TableCell className="text-xs text-right font-medium">{op.totalBultos.toLocaleString('es-AR')}</TableCell>
+  1171→                                  <TableCell className="text-xs text-right">{op.events}</TableCell>
+  1172→                                  <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
+  1173→                                  <TableCell className="text-center"><span className="text-[10px] text-muted-foreground">ver</span></TableCell>
+  1174→                                </TableRow>
+  1175→                              );
+  1176→                            })}
+  1177→                          </TableBody>
+  1178→                        </Table>
+  1179→                      </div>
+  1180→                    </CardContent>
+  1181→                  </Card>
+  1182→                ) : (
+  1183→                  <Card>
+  1184→                    <CardContent className="flex flex-col items-center py-12">
+  1185→                      <Package className="h-10 w-10 text-blue-200 mb-3" />
+  1186→                      <p className="text-sm text-muted-foreground">Sin datos para Preparación STD (zonas sin V)</p>
+  1187→                    </CardContent>
+  1188→                  </Card>
+  1189→                )
+  1190→              ) : (
+  1191→                <Card>
+  1192→                  <CardContent className="p-4">
+  1193→                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+  1194→                      <div className="flex items-center gap-2">
+  1195→                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => { setStdSelectedOp('all'); }}>
+  1196→                          <ChevronLeft className="h-3 w-3" /> STD
+  1197→                        </Button>
+  1198→                        <h3 className="text-sm font-semibold text-blue-700">
+  1199→                          {stdStats?.byOperator.find(o => o.codUti === stdSelectedOp)?.nomUti || stdSelectedOp}
+  1200→                        </h3>
+  1201→                      </div>
+  1202→                      <div className="flex items-center gap-2">
+  1203→                        <Button
+  1204→                          variant="outline"
+  1205→                          size="sm"
+  1206→                          className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+  1207→                          onClick={() => {
+  1208→                            const params = new URLSearchParams();
+  1209→                            const opStat = stdStats?.byOperator.find(o => o.codUti === stdSelectedOp);
+  1210→                            params.set('codUti', stdSelectedOp);
+  1211→                            params.set('nomUti', opStat?.nomUti || '');
+  1212→                            params.set('turno', opStat?.turno || '');
+  1213→                            params.set('tiempoNetoMin', String(opStat?.totalNetoMin || 0));
+  1214→                            params.set('tiempoBrutoMin', String(opStat?.totalMin || 0));
+  1215→                            params.set('descansoMin', String(opStat?.descansoMin || 0));
+  1216→
+  1217→                            window.open(`/sanciones?${params}`, '_blank');
+  1218→                          }}
+  1219→                        >
+  1220→                          <Shield className="h-3 w-3" />
+  1221→                          Sanción
+  1222→                        </Button>
+  1223→                        <Button
+  1224→                          variant="outline"
+  1225→                          size="sm"
+  1226→                          className="h-7 text-xs gap-1"
+  1227→                          onClick={() => {
+  1228→                            const params = new URLSearchParams();
+  1229→                            params.set('zona', 'std');
+  1230→                            params.set('operator', stdSelectedOp);
+  1231→                            if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+  1232→                            if (selectedDate !== 'all') params.set('fecha', selectedDate);
+  1233→                            window.open(`/api/export-operator?${params}`, '_blank');
+  1234→                          }}
+  1235→                        >
+  1236→                          <Download className="h-3 w-3" />
+  1237→                          <span className="hidden sm:inline">Descargar Excel</span>
+  1238→                        </Button>
+  1239→                        <span className="text-xs text-muted-foreground">{stdGapTotal} gaps &gt;5 min</span>
+  1240→                      </div>
+  1241→                    </div>
+  1242→                    {stdGapLoading ? (
+  1243→                      <div className="flex items-center justify-center py-12">
+  1244→                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  1245→                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+  1246→                      </div>
+  1247→                    ) : stdGaps.length === 0 ? (
+  1248→                      <div className="text-center py-12 text-sm text-muted-foreground">No se encontraron gaps mayores a 5 minutos</div>
+  1249→                    ) : (
+  1250→                      <>
+  1251→                        {(() => {
+  1252→                          const opStat = stdStats?.byOperator.find(o => o.codUti === stdSelectedOp);
+  1253→                          if (!opStat) return null;
+  1254→                          return (
+  1255→                            <div className="grid grid-cols-4 gap-3 text-center text-xs mb-3 p-2 bg-blue-50/60 rounded-lg border border-blue-100">
+  1256→                              <div>
+  1257→                                <p className="text-[9px] text-slate-500 uppercase">Bultos</p>
+  1258→                                <p className="font-bold text-slate-800">{(opStat.totalBultos || 0).toLocaleString('es-AR')}</p>
+  1259→                              </div>
+  1260→                              <div>
+  1261→                                <p className="text-[9px] text-slate-500 uppercase">T. Bruto</p>
+  1262→                                <p className="font-bold text-red-600">{opStat.totalMin} min</p>
+  1263→                              </div>
+  1264→                              <div>
+  1265→                                <p className="text-[9px] text-slate-500 uppercase">Descanso</p>
+  1266→                                <p className="font-bold text-slate-500">{opStat.descansoMin > 0 ? `${opStat.descansoMin} min` : '—'}</p>
+  1267→                              </div>
+  1268→                              <div>
+  1269→                                <p className="text-[9px] text-slate-500 uppercase">T. Neto</p>
+  1270→                                <p className="font-bold text-green-700">{opStat.totalNetoMin} min</p>
+  1271→                              </div>
+  1272→                            </div>
+  1273→                          );
+  1274→                        })()}
+  1275→                        <div className="overflow-x-auto">
+  1276→                          <Table>
+  1277→                            <TableHeader>
+  1278→                              <TableRow>
+  1279→                                <TableHead className="text-xs w-10 text-center">#</TableHead>
+  1280→                                <TableHead className="text-xs">Fecha</TableHead>
+  1281→                                <TableHead className="text-xs text-center w-14">Turno</TableHead>
+  1282→                                <TableHead className="text-xs text-center bg-blue-50" colSpan={4}>Pickeo Previo</TableHead>
+  1283→                                <TableHead className="text-xs text-center">Trayecto</TableHead>
+  1284→                                <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
+  1285→                                <TableHead className="text-xs text-center bg-green-50" colSpan={4}>Pickeo Posterior</TableHead>
+  1286→                              </TableRow>
+  1287→                              <TableRow>
+  1288→                                <TableHead className="text-[10px]"></TableHead>
+  1289→                                <TableHead className="text-[10px]"></TableHead>
+  1290→                                <TableHead className="text-[10px]"></TableHead>
+  1291→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
+  1292→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+  1293→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Bultos</TableHead>
+  1294→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
+  1295→                                <TableHead className="text-[10px] text-muted-foreground">Zona → Zona</TableHead>
+  1296→                                <TableHead className="text-[10px]"></TableHead>
+  1297→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
+  1298→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+  1299→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Bultos</TableHead>
+  1300→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
+  1301→                              </TableRow>
+  1302→                            </TableHeader>
+  1303→                            <TableBody>
+  1304→                              {stdGaps.map((row) => {
+  1305→                                const isTop3 = row.rank <= 3;
+  1306→                                const sameZone = row.prevZonSts === row.currZonSts;
+  1307→                                return (
+  1308→                                  <TableRow key={`std-${row.fecha}-${row.prevHora}-${row.currHora}`}
+  1309→                                    className={isTop3 ? 'bg-blue-50 hover:bg-blue-100/70' : ''}>
+  1310→                                    <TableCell className="text-center">
+  1311→                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+  1312→                                        isTop3 ? 'bg-blue-500 text-white' : 'bg-slate-100 text-muted-foreground'
+  1313→                                      }`}>{row.rank}</span>
+  1314→                                    </TableCell>
+  1315→                                    <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+  1316→                                    <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
+  1317→                                    <TableCell className="text-xs font-mono text-muted-foreground bg-blue-50/50">{row.prevHora}</TableCell>
+  1318→                                    <TableCell className="text-xs bg-blue-50/50">
+  1319→                                      <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.prevZonSts || '—'}</span>
+  1320→                                    </TableCell>
+  1321→                                    <TableCell className="text-xs text-center font-semibold bg-blue-50/50 text-blue-700">{row.prevBultos}</TableCell>
+  1322→                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.prevCodPro}</TableCell>
+  1323→                                    <TableCell className="text-center px-1">
+  1324→                                      <div className="flex items-center justify-center gap-0.5">
+  1325→                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.prevZonSts || '?'}</span>
+  1326→                                        <ArrowRight className={`h-3 w-3 ${sameZone ? 'text-slate-300' : 'text-amber-500'}`} />
+  1327→                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.currZonSts || '?'}</span>
+  1328→                                      </div>
+  1329→                                    </TableCell>
+  1330→                                    <TableCell className="text-center">
+  1331→                                      <span className="text-xs font-bold px-2 py-1 rounded bg-red-500 text-white whitespace-nowrap">{fmtDur(row.gapSeconds)}</span>
+  1332→                                    </TableCell>
+  1333→                                    <TableCell className="text-xs font-mono text-muted-foreground bg-green-50/50">{row.currHora}</TableCell>
+  1334→                                    <TableCell className="text-xs bg-green-50/50">
+  1335→                                      <span className="inline-block px-1.5 py-0.5 rounded bg-green-200 text-green-800 text-[10px] font-semibold">{row.currZonSts || '—'}</span>
+  1336→                                    </TableCell>
+  1337→                                    <TableCell className="text-xs text-center font-semibold bg-green-50/50 text-green-700">{row.currBultos}</TableCell>
+  1338→                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-green-50/50 max-w-[110px] truncate">{row.currCodPro}</TableCell>
+  1339→                                  </TableRow>
+  1340→                                );
+  1341→                              })}
+  1342→                            </TableBody>
+
+[showing lines 943-1342 of 2084; use offset=1343 with limit to continue reading]

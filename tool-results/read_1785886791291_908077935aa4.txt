@@ -1,0 +1,1630 @@
+   340→    }
+   341→    if (activeTab === 'prep-xd') {
+   342→      fetchZonaStats('xd', setXdStats);
+   343→      if (xdSelectedOp !== 'all') fetchZonaGaps('xd', xdSelectedOp, xdGapPage, setXdGaps, setXdGapPage, setXdGapTotalPages, setXdGapTotal, setXdGapLoading);
+   344→    }
+   345→    if (activeTab === 'picks') fetchPicks(1);
+   346→    if (activeTab === 'sanciones') fetchSanciones();
+   347→  }, [selectedOp, selectedTurno, selectedDate, activeTab, hasData, stdSelectedOp, stdGapPage, xdSelectedOp, xdGapPage]); // eslint-disable-line react-hooks/exhaustive-deps
+   348→
+   349→  const handleOpChange = (val: string) => {
+   350→    setSelectedOp(val);
+   351→    setGapPage(1);
+   352→    setPicksPage(1);
+   353→    if (val !== 'all') setActiveTab('operador');
+   354→  };
+   355→
+   356→  const handleTurnoChange = (val: string) => {
+   357→    setSelectedTurno(val);
+   358→    setGapPage(1);
+   359→    setPicksPage(1);
+   360→  };
+   361→
+   362→  const handleDateChange = (val: string) => {
+   363→    setSelectedDate(val);
+   364→    setGapPage(1);
+   365→    setPicksPage(1);
+   366→  };
+   367→
+   368→  const handleOperatorClick = (codUti: string) => {
+   369→    setSelectedOp(codUti);
+   370→    setGapPage(1);
+   371→    setActiveTab('operador');
+   372→  };
+   373→
+   374→  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   375→    const file = e.target.files?.[0];
+   376→    if (!file) return;
+   377→    setUploading(true);
+   378→    try {
+   379→      // Parse xlsx in browser to avoid Vercel payload size limits
+   380→      const arrayBuffer = await file.arrayBuffer();
+   381→      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+   382→      const sheetName = workbook.SheetNames[0];
+   383→      const worksheet = workbook.Sheets[sheetName];
+   384→      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
+   385→
+   386→      if (!rawRows || rawRows.length === 0) {
+   387→        throw new Error('El archivo está vacío');
+   388→      }
+   389→
+   390→      // Validate columns
+   391→      const required = ['CODUTI', 'NOMUTI', 'FECHA', 'HORA', 'CODACT', 'ZONSTS', 'ALLSTS', 'DPLSTS', 'NIVSTS', 'CODPRO', 'PCBPRO', 'BULTOS'];
+   392→      const missing = required.filter(col => !(col in rawRows[0]));
+   393→      if (missing.length > 0) throw new Error(`Faltan columnas: ${missing.join(', ')}`);
+   394→
+   395→      // Parse all rows on client
+   396→      const parsedRows = rawRows.map(row => {
+   397→        let fechaStr = '';
+   398→        const rawFecha = row['FECHA'];
+   399→        if (rawFecha instanceof Date) fechaStr = rawFecha.toISOString();
+   400→        else if (typeof rawFecha === 'number') {
+   401→          const excelEpoch = new Date(1899, 11, 30);
+   402→          fechaStr = new Date(excelEpoch.getTime() + rawFecha * 86400000).toISOString();
+   403→        } else if (typeof rawFecha === 'string') fechaStr = new Date(rawFecha).toISOString();
+   404→
+   405→        let hora = '';
+   406→        const rawHora = row['HORA'];
+   407→        if (typeof rawHora === 'number') {
+   408→          const totalSeconds = Math.floor(rawHora * 86400);
+   409→          const h = Math.floor(totalSeconds / 3600);
+   410→          const m = Math.floor((totalSeconds % 3600) / 60);
+   411→          const s = totalSeconds % 60;
+   412→          hora = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+   413→        } else if (typeof rawHora === 'string') hora = rawHora;
+   414→        else if (rawHora instanceof Date) hora = rawHora.toTimeString().slice(0, 8);
+   415→
+   416→        return {
+   417→          codUti: String(row['CODUTI'] || ''),
+   418→          nomUti: String(row['NOMUTI'] || ''),
+   419→          fecha: fechaStr,
+   420→          hora,
+   421→          codAct: Number(row['CODACT']) || 0,
+   422→          zonSts: row['ZONSTS'] ? String(row['ZONSTS']) : null,
+   423→          allSts: Number(row['ALLSTS']) || 0,
+   424→          dplSts: Number(row['DPLSTS']) || 0,
+   425→          nivSts: Number(row['NIVSTS']) || 0,
+   426→          codPro: String(row['CODPRO'] || ''),
+   427→          pcbPro: Number(row['PCBPRO']) || 0,
+   428→          bultos: Number(row['BULTOS']) || 0,
+   429→        };
+   430→      });
+   431→
+   432→      // Send in batches to avoid Vercel payload limits
+   433→      const BATCH_SIZE = 2000;
+   434→      let totalInserted = 0;
+   435→      for (let i = 0; i < parsedRows.length; i += BATCH_SIZE) {
+   436→        const batch = parsedRows.slice(i, i + BATCH_SIZE);
+   437→        const res = await fetch('/api/upload', {
+   438→          method: 'POST',
+   439→          headers: { 'Content-Type': 'application/json' },
+   440→          body: JSON.stringify({
+   441→            rows: batch,
+   442→            clearFirst: i === 0,
+   443→            totalExpected: parsedRows.length,
+   444→          }),
+   445→        });
+   446→        if (!res.ok) {
+   447→          const text = await res.text().catch(() => '');
+   448→          throw new Error(text || `Error HTTP ${res.status}`);
+   449→        }
+   450→        const data = await res.json();
+   451→        totalInserted += data.inserted || 0;
+   452→      }
+   453→
+   454→      toast({ title: 'Datos actualizados', description: `${totalInserted} registros cargados` });
+   455→      setHasData(true);
+   456→      setSelectedOp('all');
+   457→      setSelectedTurno('all');
+   458→      setSelectedDate('all');
+   459→      setActiveTab('ranking');
+   460→      await fetchFilters();
+   461→    } catch (err) {
+   462→      toast({ title: 'Error al cargar', description: err instanceof Error ? err.message : 'Error desconocido', variant: 'destructive' });
+   463→    } finally {
+   464→      setUploading(false);
+   465→      if (fileInputRef.current) fileInputRef.current.value = '';
+   466→    }
+   467→  };
+   468→
+   469→  const handleTmInfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   470→    const file = e.target.files?.[0];
+   471→    if (!file) return;
+   472→    setTmInfUploading(true);
+   473→    try {
+   474→      const fd = new FormData();
+   475→      fd.append('file', file);
+   476→      const res = await fetch('/api/tm-informados', { method: 'POST', body: fd });
+   477→      const data = await res.json();
+   478→      if (!res.ok) throw new Error(data.error);
+   479→      toast({ title: 'TM Informados cargados', description: `${data.totalRecords} registros de tiempos muertos informados` });
+   480→      await fetchStats();
+   481→    } catch (err) {
+   482→      toast({ title: 'Error al cargar TM Informados', description: err instanceof Error ? err.message : 'Error desconocido', variant: 'destructive' });
+   483→    } finally {
+   484→      setTmInfUploading(false);
+   485→      if (tmInfInputRef.current) tmInfInputRef.current.value = '';
+   486→    }
+   487→  };
+   488→
+   489→  const selectedOpName = selectedOp !== 'all'
+   490→    ? (stats?.byOperator.find(o => o.codUti === selectedOp)?.nomUti ?? filters?.operators.find(o => o.codUti === selectedOp)?.nomUti ?? selectedOp)
+   491→    : null;
+   492→  const selectedOpStats = selectedOp !== 'all'
+   493→    ? stats?.byOperator.find(o => o.codUti === selectedOp)
+   494→    : null;
+   495→
+   496→  return (
+   497→    <div className="min-h-screen flex flex-col bg-slate-50">
+   498→      {/* Header */}
+   499→      <header className="sticky top-0 z-50 border-b bg-white/90 backdrop-blur-md">
+   500→        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+   501→          <div className="flex items-center gap-3">
+   502→            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500">
+   503→              <Timer className="h-4 w-4 text-white" />
+   504→            </div>
+   505→            <h1 className="text-base sm:text-lg font-bold tracking-tight">Tiempos Muertos Operativos</h1>
+   506→          </div>
+   507→          <div className="flex items-center gap-2">
+   508→            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleUpload} />
+   509→            <input ref={tmInfInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleTmInfUpload} />
+   510→            <Button variant="outline" size="sm" onClick={() => tmInfInputRef.current?.click()} disabled={tmInfUploading} title="Cargar Tiempos Muertos Informados">
+   511→              {tmInfUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+   512→              <span className="hidden sm:inline ml-1">TM Inf.</span>
+   513→            </Button>
+   514→            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+   515→              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+   516→              <span className="hidden sm:inline ml-1">{uploading ? 'Cargando...' : 'Cargar Excel'}</span>
+   517→            </Button>
+   518→            <Button size="sm" onClick={() => { fetchStats(); fetchGaps(gapPage); fetchPicks(picksPage); }} disabled={loading || gapLoading || picksLoading}
+   519→              className="bg-red-500 text-white hover:bg-red-600">
+   520→              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+   521→              <span className="hidden sm:inline ml-1">Actualizar</span>
+   522→            </Button>
+   523→          </div>
+   524→        </div>
+   525→      </header>
+   526→
+   527→      <main className="flex-1 mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6 space-y-4">
+   528→        {!hasData ? (
+   529→          <Card className="mt-10">
+   530→            <CardContent className="flex flex-col items-center py-16">
+   531→              <Database className="h-14 w-14 text-muted-foreground/30 mb-4" />
+   532→              <h2 className="text-lg font-semibold mb-2">Sin datos cargados</h2>
+   533→              <p className="text-sm text-muted-foreground mb-6">Carga un archivo Excel para comenzar.</p>
+   534→              <Button onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4 mr-2" />Cargar archivo</Button>
+   535→            </CardContent>
+   536→          </Card>
+   537→        ) : (
+   538→          <>
+   539→            {/* Filters */}
+   540→            <div className="flex flex-wrap items-center gap-2">
+   541→              <span className="text-xs font-medium text-muted-foreground">Operador:</span>
+   542→              <div className="relative w-full sm:w-[260px]">
+   543→                <div className="flex items-center gap-1">
+   544→                  <Input
+   545→                    placeholder="Buscar por nombre o legajo..."
+   546→                    className="h-8 text-xs"
+   547→                    value={opSearch}
+   548→                    onChange={(e) => {
+   549→                      const v = e.target.value;
+   550→                      setOpSearch(v);
+   551→                      if (v.trim() === '' && selectedOp !== 'all') {
+   552→                        setSelectedOp('all');
+   553→                        handleOpChange('all');
+   554→                      }
+   555→                      setOpDropdownOpen(true);
+   556→                    }}
+   557→                    onFocus={() => setOpDropdownOpen(true)}
+   558→                    onKeyDown={(e) => {
+   559→                      if (e.key === 'Escape') {
+   560→                        setOpDropdownOpen(false);
+   561→                      }
+   562→                    }}
+   563→                  />
+   564→                  {selectedOp !== 'all' && (
+   565→                    <button
+   566→                      className="flex-shrink-0 p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+   567→                      onClick={() => {
+   568→                        setSelectedOp('all');
+   569→                        setOpSearch('');
+   570→                        handleOpChange('all');
+   571→                      }}
+   572→                      title="Limpiar selección"
+   573→                    >
+   574→                      <X className="h-3.5 w-3.5" />
+   575→                    </button>
+   576→                  )}
+   577→                </div>
+   578→                {opDropdownOpen && opSearch.trim() !== '' && filters?.operators && (
+   579→                  <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border rounded-md shadow-lg">
+   580→                    {filters.operators
+   581→                      .filter(o => o.codUti.trim())
+   582→                      .filter(o => {
+   583→                        const q = opSearch.toLowerCase().trim();
+   584→                        return o.nomUti.toLowerCase().includes(q) || o.codUti.toLowerCase().includes(q);
+   585→                      })
+   586→                      .slice(0, 20)
+   587→                      .map(o => (
+   588→                        <button
+   589→                          key={o.codUti}
+   590→                          className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 flex items-center justify-between ${selectedOp === o.codUti ? 'bg-red-50 text-red-700 font-medium' : ''}`}
+   591→                          onClick={() => {
+   592→                            setSelectedOp(o.codUti);
+   593→                            setOpSearch(o.nomUti);
+   594→                            setOpDropdownOpen(false);
+   595→                            handleOpChange(o.codUti);
+   596→                          }}
+   597→                        >
+   598→                          <span>{o.nomUti}</span>
+   599→                          <span className="text-[10px] text-muted-foreground font-mono ml-2">{o.codUti}</span>
+   600→                        </button>
+   601→                      ))}
+   602→                    {filters.operators.filter(o => o.codUti.trim()).filter(o => {
+   603→                      const q = opSearch.toLowerCase().trim();
+   604→                      return o.nomUti.toLowerCase().includes(q) || o.codUti.toLowerCase().includes(q);
+   605→                    }).length === 0 && (
+   606→                      <div className="px-3 py-2 text-xs text-muted-foreground">Sin resultados</div>
+   607→                    )}
+   608→                  </div>
+   609→                )}
+   610→              </div>
+   611→
+   612→              <span className="text-xs font-medium text-muted-foreground ml-2">Turno:</span>
+   613→              <Select value={selectedTurno} onValueChange={handleTurnoChange}>
+   614→                <SelectTrigger className="w-full sm:w-[130px] h-8 text-xs">
+   615→                  <SelectValue placeholder="Todos" />
+   616→                </SelectTrigger>
+   617→                <SelectContent>
+   618→                  <SelectItem value="all">Todos</SelectItem>
+   619→                  <SelectItem value="TM">TM (Mañana)</SelectItem>
+   620→                  <SelectItem value="TT">TT (Tarde)</SelectItem>
+   621→                  <SelectItem value="TN">TN (Noche)</SelectItem>
+   622→                </SelectContent>
+   623→              </Select>
+   624→
+   625→              <span className="text-xs font-medium text-muted-foreground ml-2">Fecha:</span>
+   626→              <Select value={selectedDate} onValueChange={handleDateChange}>
+   627→                <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs">
+   628→                  <SelectValue placeholder="Todas" />
+   629→                </SelectTrigger>
+   630→                <SelectContent>
+   631→                  <SelectItem value="all">Todas las fechas</SelectItem>
+   632→                  {filters?.dates.map(d => (
+   633→                    <SelectItem key={d} value={d}>{d}</SelectItem>
+   634→                  ))}
+   635→                </SelectContent>
+   636→              </Select>
+   637→
+   638→              {(selectedOp !== 'all' || selectedTurno !== 'all' || selectedDate !== 'all') && (
+   639→                <Button variant="ghost" size="sm" onClick={() => { setSelectedOp('all'); setSelectedTurno('all'); setSelectedDate('all'); setActiveTab('ranking'); }} className="h-8 text-xs">
+   640→                  <X className="h-3 w-3 mr-1" />Limpiar
+   641→                </Button>
+   642→              )}
+   643→            </div>
+   644→
+   645→            {/* KPIs */}
+   646→            {stats && !loading && (
+   647→              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   648→                <Card>
+   649→                  <CardContent className="p-4 flex items-center gap-3">
+   650→                    <div className="rounded-lg bg-blue-500 p-2"><BarChart3 className="h-4 w-4 text-white" /></div>
+   651→                    <div>
+   652→                      <p className="text-[10px] sm:text-xs text-muted-foreground">Total Escaneos</p>
+   653→                      <p className="text-lg sm:text-2xl font-bold">{stats.kpis.totalScans.toLocaleString('es-AR')}</p>
+   654→                    </div>
+   655→                  </CardContent>
+   656→                </Card>
+   657→                <Card className="border-red-200 bg-red-50/60">
+   658→                  <CardContent className="p-4 flex items-center gap-3">
+   659→                    <div className="rounded-lg bg-red-500 p-2"><Clock className="h-4 w-4 text-white" /></div>
+   660→                    <div>
+   661→                      <p className="text-[10px] sm:text-xs text-red-600 font-medium">Suma Tiempos Muertos</p>
+   662→                      <p className="text-lg sm:text-2xl font-bold text-red-700">{fmtDur(stats.kpis.totalDeadTime)}</p>
+   663→                      <p className="text-[10px] text-red-500">{stats.kpis.deadTimeEvents} eventos (&gt;5 min)</p>
+   664→                    </div>
+   665→                  </CardContent>
+   666→                </Card>
+   667→                <Card>
+   668→                  <CardContent className="p-4 flex items-center gap-3">
+   669→                    <div className="rounded-lg bg-amber-500 p-2"><AlertTriangle className="h-4 w-4 text-white" /></div>
+   670→                    <div>
+   671→                      <p className="text-[10px] sm:text-xs text-muted-foreground">Promedio Gap (&gt;5 min)</p>
+   672→                      <p className="text-lg sm:text-2xl font-bold">{fmtDur(stats.kpis.avgGap)}</p>
+   673→                      <p className="text-[10px] text-muted-foreground">solo tiempos muertos</p>
+   674→                    </div>
+   675→                  </CardContent>
+   676→                </Card>
+   677→                <Card>
+   678→                  <CardContent className="p-4 flex items-center gap-3">
+   679→                    <div className="rounded-lg bg-orange-500 p-2"><AlertTriangle className="h-4 w-4 text-white" /></div>
+   680→                    <div>
+   681→                      <p className="text-[10px] sm:text-xs text-muted-foreground">Mayor sin Actividad</p>
+   682→                      <p className="text-lg sm:text-2xl font-bold">{fmtDur(stats.kpis.maxGap)}</p>
+   683→                    </div>
+   684→                  </CardContent>
+   685→                </Card>
+   686→              </div>
+   687→            )}
+   688→
+   689→            {/* Summary + Shift breakdown */}
+   690→            {stats && !loading && selectedOp === 'all' && selectedTurno === 'all' && (
+   691→              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   692→                <Card className="border-red-200 bg-red-50/50">
+   693→                  <CardContent className="p-4 sm:p-5">
+   694→                    <div className="flex items-center gap-2 mb-2">
+   695→                      <ArrowDown className="h-4 w-4 text-red-500" />
+   696→                      <h3 className="text-sm font-semibold text-red-700">Resumen (&gt;5 min)</h3>
+   697→                    </div>
+   698→                    <div className="grid grid-cols-2 gap-3 text-sm">
+   699→                      <div>
+   700→                        <span className="text-[10px] text-muted-foreground block">Eventos</span>
+   701→                        <span className="font-bold text-red-600 text-base">{stats.kpis.deadTimeEvents}</span>
+   702→                      </div>
+   703→                      <div>
+   704→                        <span className="text-[10px] text-muted-foreground block">Suma total</span>
+   705→                        <span className="font-bold text-red-600 text-base">{fmtDur(stats.kpis.totalDeadTime)}</span>
+   706→                      </div>
+   707→                    </div>
+   708→                  </CardContent>
+   709→                </Card>
+   710→                <Card className="lg:col-span-2">
+   711→                  <CardContent className="p-4 sm:p-5">
+   712→                    <h3 className="text-sm font-semibold mb-3">Por Turno</h3>
+   713→                    <p className="text-[10px] text-muted-foreground mb-3">
+   714→                      TM (6-14hs) · TT (14-22hs) · TN (resto)
+   715→                    </p>
+   716→                    <div className="grid grid-cols-3 gap-3">
+   717→                      {(['TM', 'TT', 'TN'] as const).map(t => (
+   718→                        <div key={t} className={`rounded-lg p-3 border ${t === 'TM' ? 'bg-amber-50 border-amber-200' : t === 'TT' ? 'bg-orange-50 border-orange-200' : 'bg-indigo-50 border-indigo-200'}`}>
+   719→                          <div className="flex items-center gap-1.5 mb-1">
+   720→                            <TurnoBadge turno={t} />
+   721→                          </div>
+   722→                          <p className={`text-lg font-bold ${t === 'TM' ? 'text-amber-900' : t === 'TT' ? 'text-orange-900' : 'text-indigo-900'}`}>
+   723→                            {fmtDur(stats.byShift[t].sec)}
+   724→                          </p>
+   725→                          <p className={`text-[10px] ${t === 'TM' ? 'text-amber-600' : t === 'TT' ? 'text-orange-600' : 'text-indigo-600'}`}>
+   726→                            {stats.byShift[t].events} eventos · {Math.round(stats.byShift[t].sec / 60)} min
+   727→                          </p>
+   728→                        </div>
+   729→                      ))}
+   730→                    </div>
+   731→                  </CardContent>
+   732→                </Card>
+   733→              </div>
+   734→            )}
+   735→
+   736→            {/* Operator detail summary */}
+   737→            {selectedOp !== 'all' && selectedOpStats && gapSummary && (
+   738→              <Card className="border-red-200 bg-red-50/50">
+   739→                <CardContent className="p-4 sm:p-5">
+   740→                  <div className="flex items-center gap-2 mb-3">
+   741→                    <User className="h-4 w-4 text-red-500" />
+   742→                    <h3 className="text-sm font-semibold text-red-700">{selectedOpName}</h3>
+   743→                    <TurnoBadge turno={selectedOpStats.turno} />
+   744→                    <Button
+   745→                      variant="outline"
+   746→                      size="sm"
+   747→                      className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+   748→                      onClick={() => {
+   749→                        const params = new URLSearchParams();
+   750→                        params.set('codUti', selectedOp);
+   751→                        params.set('nomUti', selectedOpName || '');
+   752→                        params.set('turno', selectedOpStats.turno);
+   753→                        params.set('tiempoNetoMin', String(selectedOpStats.totalNetoMin));
+   754→                        params.set('tiempoBrutoMin', String(selectedOpStats.totalMin));
+   755→                        params.set('descansoMin', String(selectedOpStats.descansoMin));
+   756→                        window.open(`/sanciones?${params}`, '_blank');
+   757→                      }}
+   758→                    >
+   759→                      <Shield className="h-3 w-3" />
+   760→                      Sanción
+   761→                    </Button>
+   762→                  </div>
+   763→                  <div className="space-y-1.5 text-sm">
+   764→                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-slate-200">
+   765→                      <span className="text-[10px] text-muted-foreground">Bultos</span>
+   766→                      <span className="text-xs text-right font-bold text-slate-800">{(selectedOpStats.totalBultos || 0).toLocaleString('es-AR')}</span>
+   767→                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.diasTrabajados} días</span>
+   768→                    </div>
+   769→                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-red-100">
+   770→                      <span className="text-[10px] text-muted-foreground">Tiempo Muerto</span>
+   771→                      <span className="text-xs text-right font-bold text-red-600">{fmtDur(selectedOpStats.totalMinSec)}</span>
+   772→                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.totalMin} min</span>
+   773→                    </div>
+   774→                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-purple-100">
+   775→                      <span className="text-[10px] text-muted-foreground">TM Informados</span>
+   776→                      <span className="text-xs text-right font-bold text-purple-700">{selectedOpStats.tmInfMin > 0 ? `-${selectedOpStats.tmInfMin} min` : '—'}</span>
+   777→                      <span className="text-[10px] text-right text-purple-500">{selectedOpStats.tmInfEventos > 0 ? `${selectedOpStats.tmInfEventos} eventos` : '—'}</span>
+   778→                    </div>
+   779→                    <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-slate-200">
+   780→                      <span className="text-[10px] text-muted-foreground">Descanso</span>
+   781→                      <span className="text-xs text-right font-medium text-slate-500">{selectedOpStats.descansoMin > 0 ? `-${fmtDur(selectedOpStats.descansoMinSec)}` : '—'}</span>
+   782→                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.descansoMin > 0 ? `-${selectedOpStats.descansoMin} min (${selectedOpStats.diasTrabajados}d x 35m)` : selectedOpStats.turno === 'TN' ? 'no aplica (TN)' : '—'}</span>
+   783→                    </div>
+   784→                    <div className="grid grid-cols-3 gap-2 items-center py-1.5 bg-green-50/60 rounded px-1">
+   785→                      <span className="text-[10px] font-semibold text-green-700">Tiempo Neto</span>
+   786→                      <span className="text-xs text-right font-bold text-green-700">{fmtDur(selectedOpStats.totalNetoMinSec)}</span>
+   787→                      <span className="text-[10px] text-right text-green-600">{selectedOpStats.totalNetoMin} min</span>
+   788→                    </div>
+   789→                    <div className="grid grid-cols-3 gap-2 items-center pt-1 border-t border-slate-200">
+   790→                      <span className="text-[10px] text-muted-foreground">Eventos / Mayor gap</span>
+   791→                      <span className="text-xs text-right font-bold">{gapSummary.deadTimeCount} eventos</span>
+   792→                      <span className="text-xs text-right font-mono text-red-700">{fmtDur(selectedOpStats.maxGap)}</span>
+   793→                    </div>
+   794→                  </div>
+   795→                </CardContent>
+   796→              </Card>
+   797→            )}
+   798→
+   799→            {/* Tabs */}
+   800→            {stats && !loading && (
+   801→              <div className="flex gap-1 border-b">
+   802→                <button
+   803→                  onClick={() => setActiveTab('ranking')}
+   804→                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+   805→                    activeTab === 'ranking' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+   806→                  }`}
+   807→                >
+   808→                  <Trophy className="h-3 w-3 inline mr-1" />
+   809→                  Ranking
+   810→                </button>
+   811→                <button
+   812→                  onClick={() => setActiveTab('operador')}
+   813→                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+   814→                    activeTab === 'operador' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+   815→                  }`}
+   816→                >
+   817→                  <User className="h-3 w-3 inline mr-1" />
+   818→                  Por Operador
+   819→                  {selectedOp !== 'all' && (
+   820→                    <span className="ml-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">
+   821→                      {selectedOpName}
+   822→                    </span>
+   823→                  )}
+   824→                </button>
+   825→                <button
+   826→                  onClick={() => setActiveTab('prep-std')}
+   827→                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+   828→                    activeTab === 'prep-std' ? 'border-blue-500 text-blue-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+   829→                  }`}
+   830→                >
+   831→                  <Package className="h-3 w-3 inline mr-1" />
+   832→                  Prep. STD
+   833→                </button>
+   834→                <button
+   835→                  onClick={() => setActiveTab('prep-xd')}
+   836→                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+   837→                    activeTab === 'prep-xd' ? 'border-purple-500 text-purple-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+   838→                  }`}
+   839→                >
+   840→                  <Package className="h-3 w-3 inline mr-1" />
+   841→                  Prep. XD
+   842→                </button>
+   843→                <button
+   844→                  onClick={() => setActiveTab('picks')}
+   845→                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+   846→                    activeTab === 'picks' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+   847→                  }`}
+   848→                >
+   849→                  <PlayCircle className="h-3 w-3 inline mr-1" />
+   850→                  Picks
+   851→                </button>
+   852→                <button
+   853→                  onClick={() => setActiveTab('sanciones')}
+   854→                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors relative ${
+   855→                    activeTab === 'sanciones' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+   856→                  }`}
+   857→                >
+   858→                  <Shield className="h-3 w-3 inline mr-1" />
+   859→                  Sanciones
+   860→                  {sancionCount > 0 && (
+   861→                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full h-4 min-w-4 flex items-center justify-center px-1">
+   862→                      {sancionCount}
+   863→                    </span>
+   864→                  )}
+   865→                </button>
+   866→              </div>
+   867→            )}
+   868→
+   869→            {/* ===================== RANKING TAB ===================== */}
+   870→            {activeTab === 'ranking' && stats && stats.byOperator.length > 0 && (
+   871→              <Card>
+   872→                <CardContent className="p-4">
+   873→                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+   874→                    <h3 className="text-sm font-semibold">Ranking por Suma de Tiempo Muerto</h3>
+   875→                    <div className="flex items-center gap-2">
+   876→                      <Button
+   877→                        variant="outline"
+   878→                        size="sm"
+   879→                        className="h-7 text-xs gap-1"
+   880→                        onClick={() => {
+   881→                          const params = new URLSearchParams();
+   882→                          if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+   883→                          if (selectedDate !== 'all') params.set('fecha', selectedDate);
+   884→                          window.open(`/api/export-ranking?${params}`, '_blank');
+   885→                        }}
+   886→                      >
+   887→                        <Download className="h-3 w-3" />
+   888→                        <span className="hidden sm:inline">Descargar Excel</span>
+   889→                      </Button>
+   890→                      <span className="text-xs text-muted-foreground">{stats.byOperator.length} operadores</span>
+   891→                    </div>
+   892→                  </div>
+   893→                  <div className="overflow-x-auto">
+   894→                    <Table>
+   895→                      <TableHeader>
+   896→                        <TableRow>
+   897→                          <TableHead className="text-xs w-12 text-center">#</TableHead>
+   898→                          <TableHead className="text-xs">Operador</TableHead>
+   899→                          <TableHead className="text-xs text-center">Turno</TableHead>
+   900→                          <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
+   901→                          <TableHead className="text-xs text-right">Descanso</TableHead>
+   902→                          <TableHead className="text-xs text-right">T. Muerto Inf.</TableHead>
+   903→                          <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
+   904→                          <TableHead className="text-xs text-center">Dias</TableHead>
+   905→                          <TableHead className="text-xs text-right">Bultos</TableHead>
+   906→                          <TableHead className="text-xs text-right">Eventos</TableHead>
+   907→                          <TableHead className="text-xs text-right">Mayor Gap</TableHead>
+   908→                          <TableHead className="text-xs w-10"></TableHead>
+   909→                        </TableRow>
+   910→                      </TableHeader>
+   911→                      <TableBody>
+   912→                        {stats.byOperator.map((op, i) => {
+   913→                          const isTop3 = i < 3;
+   914→                          return (
+   915→                            <TableRow key={op.codUti}
+   916→                              className={`${isTop3 ? 'bg-red-50 hover:bg-red-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+   917→                              onClick={() => handleOperatorClick(op.codUti)}
+   918→                            >
+   919→                              <TableCell className="text-center">
+   920→                                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+   921→                                  isTop3 ? 'bg-red-500 text-white' : i < 10 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-muted-foreground'
+   922→                                }`}>{i + 1}</span>
+   923→                              </TableCell>
+   924→                              <TableCell>
+   925→                                <div className="text-xs font-medium">{op.nomUti}</div>
+   926→                                <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+   927→                              </TableCell>
+   928→                              <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
+   929→                              <TableCell className="text-xs text-right font-bold">
+   930→                                <span className={isTop3 ? 'text-red-600' : op.totalMin > 100 ? 'text-orange-600' : ''}>
+   931→                                  {fmtDur(op.totalMinSec)}
+   932→                                </span>
+   933→                              </TableCell>
+   934→                              <TableCell className="text-right">
+   935→                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{op.descansoMin > 0 ? `-${fmtDur(op.descansoMinSec)}` : '—'}</span>
+   936→                              </TableCell>
+   937→                              <TableCell className="text-right">
+   938→                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
+   939→                                  {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
+   940→                                </span>
+   941→                                {op.tmInfEventos > 0 && <div className="text-[9px] text-purple-500 text-center">{op.tmInfEventos} ev.</div>}
+   942→                              </TableCell>
+   943→                              <TableCell className="text-xs text-right font-bold">
+   944→                                <span className="text-green-700">
+   945→                                  {fmtDur(op.totalNetoMinSec)}
+   946→                                </span>
+   947→                              </TableCell>
+   948→                              <TableCell className="text-xs text-center text-muted-foreground">{op.diasTrabajados}</TableCell>
+   949→                              <TableCell className="text-xs text-right font-medium">{op.totalBultos.toLocaleString('es-AR')}</TableCell>
+   950→                              <TableCell className="text-xs text-right">{op.events}</TableCell>
+   951→                              <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
+   952→                              <TableCell className="text-center"><span className="text-[10px] text-muted-foreground">ver</span></TableCell>
+   953→                            </TableRow>
+   954→                          );
+   955→                        })}
+   956→                      </TableBody>
+   957→                    </Table>
+   958→                  </div>
+   959→                </CardContent>
+   960→              </Card>
+   961→            )}
+   962→
+   963→            {/* ===================== POR OPERADOR TAB ===================== */}
+   964→            {activeTab === 'operador' && (
+   965→              selectedOp === 'all' ? (
+   966→                <Card>
+   967→                  <CardContent className="flex flex-col items-center py-12">
+   968→                    <User className="h-10 w-10 text-muted-foreground/30 mb-3" />
+   969→                    <p className="text-sm text-muted-foreground">Seleccioná un operador del ranking o del filtro para ver sus eventos</p>
+   970→                  </CardContent>
+   971→                </Card>
+   972→              ) : (
+   973→                <Card>
+   974→                  <CardContent className="p-4">
+   975→                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+   976→                      <h3 className="text-sm font-semibold">Eventos de {selectedOpName}</h3>
+   977→                      <div className="flex items-center gap-2">
+   978→                        <Button
+   979→                          variant="outline"
+   980→                          size="sm"
+   981→                          className="h-7 text-xs gap-1"
+   982→                          onClick={() => {
+   983→                            const params = new URLSearchParams();
+   984→                            params.set('operator', selectedOp);
+   985→                            if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+   986→                            if (selectedDate !== 'all') params.set('fecha', selectedDate);
+   987→                            window.open(`/api/export-operator?${params}`, '_blank');
+   988→                          }}
+   989→                        >
+   990→                          <Download className="h-3 w-3" />
+   991→                          <span className="hidden sm:inline">Descargar Excel</span>
+   992→                        </Button>
+   993→                        <span className="text-xs text-muted-foreground">{gapTotal} gaps &gt;5 min</span>
+   994→                      </div>
+   995→                    </div>
+   996→                    {gapLoading ? (
+   997→                      <div className="flex items-center justify-center py-12">
+   998→                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+   999→                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+  1000→                      </div>
+  1001→                    ) : gaps.length === 0 ? (
+  1002→                      <div className="text-center py-12 text-sm text-muted-foreground">No se encontraron gaps mayores a 5 minutos</div>
+  1003→                    ) : (
+  1004→                      <>
+  1005→                        <div className="overflow-x-auto">
+  1006→                          <Table>
+  1007→                            <TableHeader>
+  1008→                              <TableRow>
+  1009→                                <TableHead className="text-xs w-10 text-center">#</TableHead>
+  1010→                                <TableHead className="text-xs">Fecha</TableHead>
+  1011→                                <TableHead className="text-xs text-center w-14">Turno</TableHead>
+  1012→                                <TableHead className="text-xs text-center bg-blue-50" colSpan={4}>Pickeo Previo</TableHead>
+  1013→                                <TableHead className="text-xs text-center">Trayecto</TableHead>
+  1014→                                <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
+  1015→                                <TableHead className="text-xs text-center bg-green-50" colSpan={4}>Pickeo Posterior</TableHead>
+  1016→                              </TableRow>
+  1017→                              <TableRow>
+  1018→                                <TableHead className="text-[10px]"></TableHead>
+  1019→                                <TableHead className="text-[10px]"></TableHead>
+  1020→                                <TableHead className="text-[10px]"></TableHead>
+  1021→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
+  1022→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+  1023→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Bultos</TableHead>
+  1024→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
+  1025→                                <TableHead className="text-[10px] text-muted-foreground">Zona → Zona</TableHead>
+  1026→                                <TableHead className="text-[10px]"></TableHead>
+  1027→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
+  1028→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+  1029→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Bultos</TableHead>
+  1030→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
+  1031→                              </TableRow>
+  1032→                            </TableHeader>
+  1033→                            <TableBody>
+  1034→                              {gaps.map((row) => {
+  1035→                                const isTop3 = row.rank <= 3;
+  1036→                                const sameZone = row.prevZonSts === row.currZonSts;
+  1037→                                return (
+  1038→                                  <TableRow key={`${row.fecha}-${row.prevHora}-${row.currHora}`}
+  1039→                                    className={isTop3 ? 'bg-red-50 hover:bg-red-100/70' : ''}>
+  1040→                                    <TableCell className="text-center">
+  1041→                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+  1042→                                        isTop3 ? 'bg-red-500 text-white' : 'bg-slate-100 text-muted-foreground'
+  1043→                                      }`}>{row.rank}</span>
+  1044→                                    </TableCell>
+  1045→                                    <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+  1046→                                    <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
+  1047→                                    <TableCell className="text-xs font-mono text-muted-foreground bg-blue-50/50">{row.prevHora}</TableCell>
+  1048→                                    <TableCell className="text-xs bg-blue-50/50">
+  1049→                                      <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.prevZonSts || '—'}</span>
+  1050→                                    </TableCell>
+  1051→                                    <TableCell className="text-xs text-center font-semibold bg-blue-50/50 text-blue-700">{row.prevBultos}</TableCell>
+  1052→                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.prevCodPro}</TableCell>
+  1053→                                    <TableCell className="text-center px-1">
+  1054→                                      <div className="flex items-center justify-center gap-0.5">
+  1055→                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.prevZonSts || '?'}</span>
+  1056→                                        <ArrowRight className={`h-3 w-3 ${sameZone ? 'text-slate-300' : 'text-amber-500'}`} />
+  1057→                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.currZonSts || '?'}</span>
+  1058→                                      </div>
+  1059→                                    </TableCell>
+  1060→                                    <TableCell className="text-center">
+  1061→                                      <span className="text-xs font-bold px-2 py-1 rounded bg-red-500 text-white whitespace-nowrap">{fmtDur(row.gapSeconds)}</span>
+  1062→                                    </TableCell>
+  1063→                                    <TableCell className="text-xs font-mono text-muted-foreground bg-green-50/50">{row.currHora}</TableCell>
+  1064→                                    <TableCell className="text-xs bg-green-50/50">
+  1065→                                      <span className="inline-block px-1.5 py-0.5 rounded bg-green-200 text-green-800 text-[10px] font-semibold">{row.currZonSts || '—'}</span>
+  1066→                                    </TableCell>
+  1067→                                    <TableCell className="text-xs text-center font-semibold bg-green-50/50 text-green-700">{row.currBultos}</TableCell>
+  1068→                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-green-50/50 max-w-[110px] truncate">{row.currCodPro}</TableCell>
+  1069→                                  </TableRow>
+  1070→                                );
+  1071→                              })}
+  1072→                            </TableBody>
+  1073→                          </Table>
+  1074→                        </div>
+  1075→                        <div className="flex items-center justify-between mt-3 pt-3 border-t">
+  1076→                          <span className="text-xs text-muted-foreground">Página {gapPage} de {gapTotalPages} ({gapTotal} gaps)</span>
+  1077→                          <div className="flex items-center gap-1">
+  1078→                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage <= 1} onClick={() => fetchGaps(gapPage - 1)}><ChevronLeft className="h-3 w-3" /></Button>
+  1079→                            <span className="text-xs px-2">{gapPage} / {gapTotalPages}</span>
+  1080→                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={gapPage >= gapTotalPages} onClick={() => fetchGaps(gapPage + 1)}><ChevronRight className="h-3 w-3" /></Button>
+  1081→                          </div>
+  1082→                        </div>
+  1083→                      </>
+  1084→                    )}
+  1085→                  </CardContent>
+  1086→                </Card>
+  1087→              )
+  1088→            )}
+  1089→
+  1090→            {/* ===================== PREP STD TAB ===================== */}
+  1091→            {activeTab === 'prep-std' && (
+  1092→              stdSelectedOp === 'all' ? (
+  1093→                stdStats && stdStats.byOperator.length > 0 ? (
+  1094→                  <Card>
+  1095→                    <CardContent className="p-4">
+  1096→                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+  1097→                        <h3 className="text-sm font-semibold text-blue-700">Ranking Preparación STD</h3>
+  1098→                        <div className="flex items-center gap-2">
+  1099→                          <Button
+  1100→                            variant="outline"
+  1101→                            size="sm"
+  1102→                            className="h-7 text-xs gap-1"
+  1103→                            onClick={() => {
+  1104→                              const params = new URLSearchParams();
+  1105→                              params.set('zona', 'std');
+  1106→                              if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+  1107→                              if (selectedDate !== 'all') params.set('fecha', selectedDate);
+  1108→                              window.open(`/api/export-ranking?${params}`, '_blank');
+  1109→                            }}
+  1110→                          >
+  1111→                            <Download className="h-3 w-3" />
+  1112→                            <span className="hidden sm:inline">Descargar Excel</span>
+  1113→                          </Button>
+  1114→                          <span className="text-xs text-muted-foreground">{stdStats.byOperator.length} operadores</span>
+  1115→                        </div>
+  1116→                      </div>
+  1117→                      <div className="overflow-x-auto">
+  1118→                        <Table>
+  1119→                          <TableHeader>
+  1120→                            <TableRow>
+  1121→                              <TableHead className="text-xs w-12 text-center">#</TableHead>
+  1122→                              <TableHead className="text-xs">Operador</TableHead>
+  1123→                              <TableHead className="text-xs text-center">Turno</TableHead>
+  1124→                              <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
+  1125→                              <TableHead className="text-xs text-right">Descanso</TableHead>
+  1126→                              <TableHead className="text-xs text-right">T. Muerto Inf.</TableHead>
+  1127→                              <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
+  1128→                              <TableHead className="text-xs text-center">Dias</TableHead>
+  1129→                              <TableHead className="text-xs text-right">Bultos</TableHead>
+  1130→                              <TableHead className="text-xs text-right">Eventos</TableHead>
+  1131→                              <TableHead className="text-xs text-right">Mayor Gap</TableHead>
+  1132→                              <TableHead className="text-xs w-10"></TableHead>
+  1133→                            </TableRow>
+  1134→                          </TableHeader>
+  1135→                          <TableBody>
+  1136→                            {stdStats.byOperator.map((op, i) => {
+  1137→                              const isTop3 = i < 3;
+  1138→                              return (
+  1139→                                <TableRow key={`std-${op.codUti}`}
+  1140→                                  className={`${isTop3 ? 'bg-blue-50 hover:bg-blue-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+  1141→                                  onClick={() => { setStdSelectedOp(op.codUti); setStdGapPage(1); }}
+  1142→                                >
+  1143→                                  <TableCell className="text-center">
+  1144→                                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+  1145→                                      isTop3 ? 'bg-blue-500 text-white' : i < 10 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-muted-foreground'
+  1146→                                    }`}>{i + 1}</span>
+  1147→                                  </TableCell>
+  1148→                                  <TableCell>
+  1149→                                    <div className="text-xs font-medium">{op.nomUti}</div>
+  1150→                                    <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+  1151→                                  </TableCell>
+  1152→                                  <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
+  1153→                                  <TableCell className="text-xs text-right font-bold text-blue-600">{fmtDur(op.totalMinSec)}</TableCell>
+  1154→                                  <TableCell className="text-right">
+  1155→                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{op.descansoMin > 0 ? `-${fmtDur(op.descansoMinSec)}` : '—'}</span>
+  1156→                                  </TableCell>
+  1157→                                  <TableCell className="text-right">
+  1158→                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
+  1159→                                      {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
+  1160→                                    </span>
+  1161→                                    {op.tmInfEventos > 0 && <div className="text-[9px] text-purple-500 text-center">{op.tmInfEventos} ev.</div>}
+  1162→                                  </TableCell>
+  1163→                                  <TableCell className="text-xs text-right font-bold text-green-700">{fmtDur(op.totalNetoMinSec)}</TableCell>
+  1164→                                  <TableCell className="text-xs text-center text-muted-foreground">{op.diasTrabajados}</TableCell>
+  1165→                                  <TableCell className="text-xs text-right font-medium">{op.totalBultos.toLocaleString('es-AR')}</TableCell>
+  1166→                                  <TableCell className="text-xs text-right">{op.events}</TableCell>
+  1167→                                  <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
+  1168→                                  <TableCell className="text-center"><span className="text-[10px] text-muted-foreground">ver</span></TableCell>
+  1169→                                </TableRow>
+  1170→                              );
+  1171→                            })}
+  1172→                          </TableBody>
+  1173→                        </Table>
+  1174→                      </div>
+  1175→                    </CardContent>
+  1176→                  </Card>
+  1177→                ) : (
+  1178→                  <Card>
+  1179→                    <CardContent className="flex flex-col items-center py-12">
+  1180→                      <Package className="h-10 w-10 text-blue-200 mb-3" />
+  1181→                      <p className="text-sm text-muted-foreground">Sin datos para Preparación STD (zonas sin V)</p>
+  1182→                    </CardContent>
+  1183→                  </Card>
+  1184→                )
+  1185→              ) : (
+  1186→                <Card>
+  1187→                  <CardContent className="p-4">
+  1188→                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+  1189→                      <div className="flex items-center gap-2">
+  1190→                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => { setStdSelectedOp('all'); }}>
+  1191→                          <ChevronLeft className="h-3 w-3" /> STD
+  1192→                        </Button>
+  1193→                        <h3 className="text-sm font-semibold text-blue-700">
+  1194→                          {stdStats?.byOperator.find(o => o.codUti === stdSelectedOp)?.nomUti || stdSelectedOp}
+  1195→                        </h3>
+  1196→                      </div>
+  1197→                      <div className="flex items-center gap-2">
+  1198→                        <Button
+  1199→                          variant="outline"
+  1200→                          size="sm"
+  1201→                          className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+  1202→                          onClick={() => {
+  1203→                            const params = new URLSearchParams();
+  1204→                            const opStat = stdStats?.byOperator.find(o => o.codUti === stdSelectedOp);
+  1205→                            params.set('codUti', stdSelectedOp);
+  1206→                            params.set('nomUti', opStat?.nomUti || '');
+  1207→                            params.set('turno', opStat?.turno || '');
+  1208→                            params.set('tiempoNetoMin', String(opStat?.totalNetoMin || 0));
+  1209→                            params.set('tiempoBrutoMin', String(opStat?.totalMin || 0));
+  1210→                            params.set('descansoMin', String(opStat?.descansoMin || 0));
+  1211→
+  1212→                            window.open(`/sanciones?${params}`, '_blank');
+  1213→                          }}
+  1214→                        >
+  1215→                          <Shield className="h-3 w-3" />
+  1216→                          Sanción
+  1217→                        </Button>
+  1218→                        <Button
+  1219→                          variant="outline"
+  1220→                          size="sm"
+  1221→                          className="h-7 text-xs gap-1"
+  1222→                          onClick={() => {
+  1223→                            const params = new URLSearchParams();
+  1224→                            params.set('zona', 'std');
+  1225→                            params.set('operator', stdSelectedOp);
+  1226→                            if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+  1227→                            if (selectedDate !== 'all') params.set('fecha', selectedDate);
+  1228→                            window.open(`/api/export-operator?${params}`, '_blank');
+  1229→                          }}
+  1230→                        >
+  1231→                          <Download className="h-3 w-3" />
+  1232→                          <span className="hidden sm:inline">Descargar Excel</span>
+  1233→                        </Button>
+  1234→                        <span className="text-xs text-muted-foreground">{stdGapTotal} gaps &gt;5 min</span>
+  1235→                      </div>
+  1236→                    </div>
+  1237→                    {stdGapLoading ? (
+  1238→                      <div className="flex items-center justify-center py-12">
+  1239→                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  1240→                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+  1241→                      </div>
+  1242→                    ) : stdGaps.length === 0 ? (
+  1243→                      <div className="text-center py-12 text-sm text-muted-foreground">No se encontraron gaps mayores a 5 minutos</div>
+  1244→                    ) : (
+  1245→                      <>
+  1246→                        {(() => {
+  1247→                          const opStat = stdStats?.byOperator.find(o => o.codUti === stdSelectedOp);
+  1248→                          if (!opStat) return null;
+  1249→                          return (
+  1250→                            <div className="grid grid-cols-4 gap-3 text-center text-xs mb-3 p-2 bg-blue-50/60 rounded-lg border border-blue-100">
+  1251→                              <div>
+  1252→                                <p className="text-[9px] text-slate-500 uppercase">Bultos</p>
+  1253→                                <p className="font-bold text-slate-800">{(opStat.totalBultos || 0).toLocaleString('es-AR')}</p>
+  1254→                              </div>
+  1255→                              <div>
+  1256→                                <p className="text-[9px] text-slate-500 uppercase">T. Bruto</p>
+  1257→                                <p className="font-bold text-red-600">{opStat.totalMin} min</p>
+  1258→                              </div>
+  1259→                              <div>
+  1260→                                <p className="text-[9px] text-slate-500 uppercase">Descanso</p>
+  1261→                                <p className="font-bold text-slate-500">{opStat.descansoMin > 0 ? `${opStat.descansoMin} min` : '—'}</p>
+  1262→                              </div>
+  1263→                              <div>
+  1264→                                <p className="text-[9px] text-slate-500 uppercase">T. Neto</p>
+  1265→                                <p className="font-bold text-green-700">{opStat.totalNetoMin} min</p>
+  1266→                              </div>
+  1267→                            </div>
+  1268→                          );
+  1269→                        })()}
+  1270→                        <div className="overflow-x-auto">
+  1271→                          <Table>
+  1272→                            <TableHeader>
+  1273→                              <TableRow>
+  1274→                                <TableHead className="text-xs w-10 text-center">#</TableHead>
+  1275→                                <TableHead className="text-xs">Fecha</TableHead>
+  1276→                                <TableHead className="text-xs text-center w-14">Turno</TableHead>
+  1277→                                <TableHead className="text-xs text-center bg-blue-50" colSpan={4}>Pickeo Previo</TableHead>
+  1278→                                <TableHead className="text-xs text-center">Trayecto</TableHead>
+  1279→                                <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
+  1280→                                <TableHead className="text-xs text-center bg-green-50" colSpan={4}>Pickeo Posterior</TableHead>
+  1281→                              </TableRow>
+  1282→                              <TableRow>
+  1283→                                <TableHead className="text-[10px]"></TableHead>
+  1284→                                <TableHead className="text-[10px]"></TableHead>
+  1285→                                <TableHead className="text-[10px]"></TableHead>
+  1286→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
+  1287→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+  1288→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Bultos</TableHead>
+  1289→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
+  1290→                                <TableHead className="text-[10px] text-muted-foreground">Zona → Zona</TableHead>
+  1291→                                <TableHead className="text-[10px]"></TableHead>
+  1292→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
+  1293→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+  1294→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Bultos</TableHead>
+  1295→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
+  1296→                              </TableRow>
+  1297→                            </TableHeader>
+  1298→                            <TableBody>
+  1299→                              {stdGaps.map((row) => {
+  1300→                                const isTop3 = row.rank <= 3;
+  1301→                                const sameZone = row.prevZonSts === row.currZonSts;
+  1302→                                return (
+  1303→                                  <TableRow key={`std-${row.fecha}-${row.prevHora}-${row.currHora}`}
+  1304→                                    className={isTop3 ? 'bg-blue-50 hover:bg-blue-100/70' : ''}>
+  1305→                                    <TableCell className="text-center">
+  1306→                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+  1307→                                        isTop3 ? 'bg-blue-500 text-white' : 'bg-slate-100 text-muted-foreground'
+  1308→                                      }`}>{row.rank}</span>
+  1309→                                    </TableCell>
+  1310→                                    <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+  1311→                                    <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
+  1312→                                    <TableCell className="text-xs font-mono text-muted-foreground bg-blue-50/50">{row.prevHora}</TableCell>
+  1313→                                    <TableCell className="text-xs bg-blue-50/50">
+  1314→                                      <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.prevZonSts || '—'}</span>
+  1315→                                    </TableCell>
+  1316→                                    <TableCell className="text-xs text-center font-semibold bg-blue-50/50 text-blue-700">{row.prevBultos}</TableCell>
+  1317→                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.prevCodPro}</TableCell>
+  1318→                                    <TableCell className="text-center px-1">
+  1319→                                      <div className="flex items-center justify-center gap-0.5">
+  1320→                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.prevZonSts || '?'}</span>
+  1321→                                        <ArrowRight className={`h-3 w-3 ${sameZone ? 'text-slate-300' : 'text-amber-500'}`} />
+  1322→                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.currZonSts || '?'}</span>
+  1323→                                      </div>
+  1324→                                    </TableCell>
+  1325→                                    <TableCell className="text-center">
+  1326→                                      <span className="text-xs font-bold px-2 py-1 rounded bg-red-500 text-white whitespace-nowrap">{fmtDur(row.gapSeconds)}</span>
+  1327→                                    </TableCell>
+  1328→                                    <TableCell className="text-xs font-mono text-muted-foreground bg-green-50/50">{row.currHora}</TableCell>
+  1329→                                    <TableCell className="text-xs bg-green-50/50">
+  1330→                                      <span className="inline-block px-1.5 py-0.5 rounded bg-green-200 text-green-800 text-[10px] font-semibold">{row.currZonSts || '—'}</span>
+  1331→                                    </TableCell>
+  1332→                                    <TableCell className="text-xs text-center font-semibold bg-green-50/50 text-green-700">{row.currBultos}</TableCell>
+  1333→                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-green-50/50 max-w-[110px] truncate">{row.currCodPro}</TableCell>
+  1334→                                  </TableRow>
+  1335→                                );
+  1336→                              })}
+  1337→                            </TableBody>
+  1338→                          </Table>
+  1339→                        </div>
+  1340→                        <div className="flex items-center justify-between mt-3 pt-3 border-t">
+  1341→                          <span className="text-xs text-muted-foreground">Página {stdGapPage} de {stdGapTotalPages} ({stdGapTotal} gaps)</span>
+  1342→                          <div className="flex items-center gap-1">
+  1343→                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={stdGapPage <= 1} onClick={() => setStdGapPage(p => p - 1)}><ChevronLeft className="h-3 w-3" /></Button>
+  1344→                            <span className="text-xs px-2">{stdGapPage} / {stdGapTotalPages}</span>
+  1345→                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={stdGapPage >= stdGapTotalPages} onClick={() => setStdGapPage(p => p + 1)}><ChevronRight className="h-3 w-3" /></Button>
+  1346→                          </div>
+  1347→                        </div>
+  1348→                      </>
+  1349→                    )}
+  1350→                  </CardContent>
+  1351→                </Card>
+  1352→              )
+  1353→            )}
+  1354→
+  1355→            {/* ===================== PREP XD TAB ===================== */}
+  1356→            {activeTab === 'prep-xd' && (
+  1357→              xdSelectedOp === 'all' ? (
+  1358→                xdStats && xdStats.byOperator.length > 0 ? (
+  1359→                  <Card>
+  1360→                    <CardContent className="p-4">
+  1361→                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+  1362→                        <h3 className="text-sm font-semibold text-purple-700">Ranking Preparación XD</h3>
+  1363→                        <div className="flex items-center gap-2">
+  1364→                          <Button
+  1365→                            variant="outline"
+  1366→                            size="sm"
+  1367→                            className="h-7 text-xs gap-1"
+  1368→                            onClick={() => {
+  1369→                              const params = new URLSearchParams();
+  1370→                              params.set('zona', 'xd');
+  1371→                              if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+  1372→                              if (selectedDate !== 'all') params.set('fecha', selectedDate);
+  1373→                              window.open(`/api/export-ranking?${params}`, '_blank');
+  1374→                            }}
+  1375→                          >
+  1376→                            <Download className="h-3 w-3" />
+  1377→                            <span className="hidden sm:inline">Descargar Excel</span>
+  1378→                          </Button>
+  1379→                          <span className="text-xs text-muted-foreground">{xdStats.byOperator.length} operadores</span>
+  1380→                        </div>
+  1381→                      </div>
+  1382→                      <div className="overflow-x-auto">
+  1383→                        <Table>
+  1384→                          <TableHeader>
+  1385→                            <TableRow>
+  1386→                              <TableHead className="text-xs w-12 text-center">#</TableHead>
+  1387→                              <TableHead className="text-xs">Operador</TableHead>
+  1388→                              <TableHead className="text-xs text-center">Turno</TableHead>
+  1389→                              <TableHead className="text-xs text-right">Tiempo Bruto</TableHead>
+  1390→                              <TableHead className="text-xs text-right">Descanso</TableHead>
+  1391→                              <TableHead className="text-xs text-right">T. Muerto Inf.</TableHead>
+  1392→                              <TableHead className="text-xs text-right">Tiempo Neto</TableHead>
+  1393→                              <TableHead className="text-xs text-center">Dias</TableHead>
+  1394→                              <TableHead className="text-xs text-right">Bultos</TableHead>
+  1395→                              <TableHead className="text-xs text-right">Eventos</TableHead>
+  1396→                              <TableHead className="text-xs text-right">Mayor Gap</TableHead>
+  1397→                              <TableHead className="text-xs w-10"></TableHead>
+  1398→                            </TableRow>
+  1399→                          </TableHeader>
+  1400→                          <TableBody>
+  1401→                            {xdStats.byOperator.map((op, i) => {
+  1402→                              const isTop3 = i < 3;
+  1403→                              return (
+  1404→                                <TableRow key={`xd-${op.codUti}`}
+  1405→                                  className={`${isTop3 ? 'bg-purple-50 hover:bg-purple-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+  1406→                                  onClick={() => { setXdSelectedOp(op.codUti); setXdGapPage(1); }}
+  1407→                                >
+  1408→                                  <TableCell className="text-center">
+  1409→                                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+  1410→                                      isTop3 ? 'bg-purple-500 text-white' : i < 10 ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-muted-foreground'
+  1411→                                    }`}>{i + 1}</span>
+  1412→                                  </TableCell>
+  1413→                                  <TableCell>
+  1414→                                    <div className="text-xs font-medium">{op.nomUti}</div>
+  1415→                                    <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+  1416→                                  </TableCell>
+  1417→                                  <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
+  1418→                                  <TableCell className="text-xs text-right font-bold text-purple-600">{fmtDur(op.totalMinSec)}</TableCell>
+  1419→                                  <TableCell className="text-right">
+  1420→                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{op.descansoMin > 0 ? `-${fmtDur(op.descansoMinSec)}` : '—'}</span>
+  1421→                                  </TableCell>
+  1422→                                  <TableCell className="text-right">
+  1423→                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${op.tmInfMin > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-50 text-muted-foreground'}`}>
+  1424→                                      {op.tmInfMin > 0 ? `-${op.tmInfMin} min` : '—'}
+  1425→                                    </span>
+  1426→                                    {op.tmInfEventos > 0 && <div className="text-[9px] text-purple-500 text-center">{op.tmInfEventos} ev.</div>}
+  1427→                                  </TableCell>
+  1428→                                  <TableCell className="text-xs text-right font-bold text-green-700">{fmtDur(op.totalNetoMinSec)}</TableCell>
+  1429→                                  <TableCell className="text-xs text-center text-muted-foreground">{op.diasTrabajados}</TableCell>
+  1430→                                  <TableCell className="text-xs text-right font-medium">{op.totalBultos.toLocaleString('es-AR')}</TableCell>
+  1431→                                  <TableCell className="text-xs text-right">{op.events}</TableCell>
+  1432→                                  <TableCell className="text-xs text-right font-mono">{fmtDur(op.maxGap)}</TableCell>
+  1433→                                  <TableCell className="text-center"><span className="text-[10px] text-muted-foreground">ver</span></TableCell>
+  1434→                                </TableRow>
+  1435→                              );
+  1436→                            })}
+  1437→                          </TableBody>
+  1438→                        </Table>
+  1439→                      </div>
+  1440→                    </CardContent>
+  1441→                  </Card>
+  1442→                ) : (
+  1443→                  <Card>
+  1444→                    <CardContent className="flex flex-col items-center py-12">
+  1445→                      <Package className="h-10 w-10 text-purple-200 mb-3" />
+  1446→                      <p className="text-sm text-muted-foreground">Sin datos para Preparación XD (zonas con V)</p>
+  1447→                    </CardContent>
+  1448→                  </Card>
+  1449→                )
+  1450→              ) : (
+  1451→                <Card>
+  1452→                  <CardContent className="p-4">
+  1453→                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+  1454→                      <div className="flex items-center gap-2">
+  1455→                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => { setXdSelectedOp('all'); }}>
+  1456→                          <ChevronLeft className="h-3 w-3" /> XD
+  1457→                        </Button>
+  1458→                        <h3 className="text-sm font-semibold text-purple-700">
+  1459→                          {xdStats?.byOperator.find(o => o.codUti === xdSelectedOp)?.nomUti || xdSelectedOp}
+  1460→                        </h3>
+  1461→                      </div>
+  1462→                      <div className="flex items-center gap-2">
+  1463→                        <Button
+  1464→                          variant="outline"
+  1465→                          size="sm"
+  1466→                          className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+  1467→                          onClick={() => {
+  1468→                            const params = new URLSearchParams();
+  1469→                            const opStat = xdStats?.byOperator.find(o => o.codUti === xdSelectedOp);
+  1470→                            params.set('codUti', xdSelectedOp);
+  1471→                            params.set('nomUti', opStat?.nomUti || '');
+  1472→                            params.set('turno', opStat?.turno || '');
+  1473→                            params.set('tiempoNetoMin', String(opStat?.totalNetoMin || 0));
+  1474→                            params.set('tiempoBrutoMin', String(opStat?.totalMin || 0));
+  1475→                            params.set('descansoMin', String(opStat?.descansoMin || 0));
+  1476→
+  1477→                            window.open(`/sanciones?${params}`, '_blank');
+  1478→                          }}
+  1479→                        >
+  1480→                          <Shield className="h-3 w-3" />
+  1481→                          Sanción
+  1482→                        </Button>
+  1483→                        <Button
+  1484→                          variant="outline"
+  1485→                          size="sm"
+  1486→                          className="h-7 text-xs gap-1"
+  1487→                          onClick={() => {
+  1488→                            const params = new URLSearchParams();
+  1489→                            params.set('zona', 'xd');
+  1490→                            params.set('operator', xdSelectedOp);
+  1491→                            if (selectedTurno !== 'all') params.set('turno', selectedTurno);
+  1492→                            if (selectedDate !== 'all') params.set('fecha', selectedDate);
+  1493→                            window.open(`/api/export-operator?${params}`, '_blank');
+  1494→                          }}
+  1495→                        >
+  1496→                          <Download className="h-3 w-3" />
+  1497→                          <span className="hidden sm:inline">Descargar Excel</span>
+  1498→                        </Button>
+  1499→                        <span className="text-xs text-muted-foreground">{xdGapTotal} gaps &gt;5 min</span>
+  1500→                      </div>
+  1501→                    </div>
+  1502→                    {xdGapLoading ? (
+  1503→                      <div className="flex items-center justify-center py-12">
+  1504→                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  1505→                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+  1506→                      </div>
+  1507→                    ) : xdGaps.length === 0 ? (
+  1508→                      <div className="text-center py-12 text-sm text-muted-foreground">No se encontraron gaps mayores a 5 minutos</div>
+  1509→                    ) : (
+  1510→                      <>
+  1511→                        {(() => {
+  1512→                          const opStat = xdStats?.byOperator.find(o => o.codUti === xdSelectedOp);
+  1513→                          if (!opStat) return null;
+  1514→                          return (
+  1515→                            <div className="grid grid-cols-4 gap-3 text-center text-xs mb-3 p-2 bg-purple-50/60 rounded-lg border border-purple-100">
+  1516→                              <div>
+  1517→                                <p className="text-[9px] text-slate-500 uppercase">Bultos</p>
+  1518→                                <p className="font-bold text-slate-800">{(opStat.totalBultos || 0).toLocaleString('es-AR')}</p>
+  1519→                              </div>
+  1520→                              <div>
+  1521→                                <p className="text-[9px] text-slate-500 uppercase">T. Bruto</p>
+  1522→                                <p className="font-bold text-red-600">{opStat.totalMin} min</p>
+  1523→                              </div>
+  1524→                              <div>
+  1525→                                <p className="text-[9px] text-slate-500 uppercase">Descanso</p>
+  1526→                                <p className="font-bold text-slate-500">{opStat.descansoMin > 0 ? `${opStat.descansoMin} min` : '—'}</p>
+  1527→                              </div>
+  1528→                              <div>
+  1529→                                <p className="text-[9px] text-slate-500 uppercase">T. Neto</p>
+  1530→                                <p className="font-bold text-green-700">{opStat.totalNetoMin} min</p>
+  1531→                              </div>
+  1532→                            </div>
+  1533→                          );
+  1534→                        })()}
+  1535→                        <div className="overflow-x-auto">
+  1536→                          <Table>
+  1537→                            <TableHeader>
+  1538→                              <TableRow>
+  1539→                                <TableHead className="text-xs w-10 text-center">#</TableHead>
+  1540→                                <TableHead className="text-xs">Fecha</TableHead>
+  1541→                                <TableHead className="text-xs text-center w-14">Turno</TableHead>
+  1542→                                <TableHead className="text-xs text-center bg-blue-50" colSpan={4}>Pickeo Previo</TableHead>
+  1543→                                <TableHead className="text-xs text-center">Trayecto</TableHead>
+  1544→                                <TableHead className="text-xs text-center text-red-600 font-bold">Gap</TableHead>
+  1545→                                <TableHead className="text-xs text-center bg-green-50" colSpan={4}>Pickeo Posterior</TableHead>
+  1546→                              </TableRow>
+  1547→                              <TableRow>
+  1548→                                <TableHead className="text-[10px]"></TableHead>
+  1549→                                <TableHead className="text-[10px]"></TableHead>
+  1550→                                <TableHead className="text-[10px]"></TableHead>
+  1551→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
+  1552→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+  1553→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Bultos</TableHead>
+  1554→                                <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
+  1555→                                <TableHead className="text-[10px] text-muted-foreground">Zona → Zona</TableHead>
+  1556→                                <TableHead className="text-[10px]"></TableHead>
+  1557→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
+  1558→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+  1559→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Bultos</TableHead>
+  1560→                                <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
+  1561→                              </TableRow>
+  1562→                            </TableHeader>
+  1563→                            <TableBody>
+  1564→                              {xdGaps.map((row) => {
+  1565→                                const isTop3 = row.rank <= 3;
+  1566→                                const sameZone = row.prevZonSts === row.currZonSts;
+  1567→                                return (
+  1568→                                  <TableRow key={`xd-${row.fecha}-${row.prevHora}-${row.currHora}`}
+  1569→                                    className={isTop3 ? 'bg-purple-50 hover:bg-purple-100/70' : ''}>
+  1570→                                    <TableCell className="text-center">
+  1571→                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+  1572→                                        isTop3 ? 'bg-purple-500 text-white' : 'bg-slate-100 text-muted-foreground'
+  1573→                                      }`}>{row.rank}</span>
+  1574→                                    </TableCell>
+  1575→                                    <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+  1576→                                    <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
+  1577→                                    <TableCell className="text-xs font-mono text-muted-foreground bg-blue-50/50">{row.prevHora}</TableCell>
+  1578→                                    <TableCell className="text-xs bg-blue-50/50">
+  1579→                                      <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.prevZonSts || '—'}</span>
+  1580→                                    </TableCell>
+  1581→                                    <TableCell className="text-xs text-center font-semibold bg-blue-50/50 text-blue-700">{row.prevBultos}</TableCell>
+  1582→                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.prevCodPro}</TableCell>
+  1583→                                    <TableCell className="text-center px-1">
+  1584→                                      <div className="flex items-center justify-center gap-0.5">
+  1585→                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.prevZonSts || '?'}</span>
+  1586→                                        <ArrowRight className={`h-3 w-3 ${sameZone ? 'text-slate-300' : 'text-amber-500'}`} />
+  1587→                                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${sameZone ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>{row.currZonSts || '?'}</span>
+  1588→                                      </div>
+  1589→                                    </TableCell>
+  1590→                                    <TableCell className="text-center">
+  1591→                                      <span className="text-xs font-bold px-2 py-1 rounded bg-red-500 text-white whitespace-nowrap">{fmtDur(row.gapSeconds)}</span>
+  1592→                                    </TableCell>
+  1593→                                    <TableCell className="text-xs font-mono text-muted-foreground bg-green-50/50">{row.currHora}</TableCell>
+  1594→                                    <TableCell className="text-xs bg-green-50/50">
+  1595→                                      <span className="inline-block px-1.5 py-0.5 rounded bg-green-200 text-green-800 text-[10px] font-semibold">{row.currZonSts || '—'}</span>
+  1596→                                    </TableCell>
+  1597→                                    <TableCell className="text-xs text-center font-semibold bg-green-50/50 text-green-700">{row.currBultos}</TableCell>
+  1598→                                    <TableCell className="text-[10px] font-mono text-muted-foreground bg-green-50/50 max-w-[110px] truncate">{row.currCodPro}</TableCell>
+  1599→                                  </TableRow>
+  1600→                                );
+  1601→                              })}
+  1602→                            </TableBody>
+  1603→                          </Table>
+  1604→                        </div>
+  1605→                        <div className="flex items-center justify-between mt-3 pt-3 border-t">
+  1606→                          <span className="text-xs text-muted-foreground">Página {xdGapPage} de {xdGapTotalPages} ({xdGapTotal} gaps)</span>
+  1607→                          <div className="flex items-center gap-1">
+  1608→                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={xdGapPage <= 1} onClick={() => setXdGapPage(p => p - 1)}><ChevronLeft className="h-3 w-3" /></Button>
+  1609→                            <span className="text-xs px-2">{xdGapPage} / {xdGapTotalPages}</span>
+  1610→                            <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={xdGapPage >= xdGapTotalPages} onClick={() => setXdGapPage(p => p + 1)}><ChevronRight className="h-3 w-3" /></Button>
+  1611→                          </div>
+  1612→                        </div>
+  1613→                      </>
+  1614→                    )}
+  1615→                  </CardContent>
+  1616→                </Card>
+  1617→              )
+  1618→            )}
+  1619→
+  1620→            {/* ===================== PICKS TAB ===================== */}
+  1621→            {activeTab === 'picks' && (
+  1622→              <Card>
+  1623→                <CardContent className="p-4">
+  1624→                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+  1625→                    <h3 className="text-sm font-semibold">Primer y Último Pikeo por Colaborador</h3>
+  1626→                    <span className="text-xs text-muted-foreground">{picksTotal} registros</span>
+  1627→                  </div>
+  1628→                  {picksLoading ? (
+  1629→                    <div className="flex items-center justify-center py-12">
+  1630→                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  1631→                      <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+  1632→                    </div>
+  1633→                  ) : picks.length === 0 ? (
+  1634→                    <div className="text-center py-12 text-sm text-muted-foreground">Sin datos</div>
+  1635→                  ) : (
+  1636→                    <>
+  1637→                      <div className="overflow-x-auto">
+  1638→                        <Table>
+  1639→                          <TableHeader>
+  1640→                            <TableRow>
+  1641→                              <TableHead className="text-xs">Operador</TableHead>
+  1642→                              <TableHead className="text-xs">Fecha</TableHead>
+  1643→                              <TableHead className="text-xs text-center w-14">Turno</TableHead>
+  1644→                              <TableHead className="text-xs text-center">Escaneos</TableHead>
+  1645→                              <TableHead className="text-xs text-center bg-blue-50" colSpan={3}>
+  1646→                                <span className="flex items-center justify-center gap-1"><PlayCircle className="h-3 w-3 text-blue-500" /> Primer Pikeo</span>
+  1647→                              </TableHead>
+  1648→                              <TableHead className="text-xs text-center">Jornada</TableHead>
+  1649→                              <TableHead className="text-xs text-center">Descanso</TableHead>
+  1650→                              <TableHead className="text-xs text-center">Efectiva</TableHead>
+  1651→                              <TableHead className="text-xs text-center bg-green-50" colSpan={3}>
+  1652→                                <span className="flex items-center justify-center gap-1"><StopCircle className="h-3 w-3 text-green-500" /> Último Pikeo</span>
+  1653→                              </TableHead>
+  1654→                            </TableRow>
+  1655→                            <TableRow>
+  1656→                              <TableHead className="text-[10px]"></TableHead>
+  1657→                              <TableHead className="text-[10px]"></TableHead>
+  1658→                              <TableHead className="text-[10px]"></TableHead>
+  1659→                              <TableHead className="text-[10px]"></TableHead>
+  1660→                              <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Hora</TableHead>
+  1661→                              <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
+  1662→                              <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
+  1663→                              <TableHead className="text-[10px] text-muted-foreground">Bruta</TableHead>
+  1664→                              <TableHead className="text-[10px] text-muted-foreground">35m</TableHead>
+  1665→                              <TableHead className="text-[10px] text-muted-foreground">Neta</TableHead>
+  1666→                              <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
+  1667→                              <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
+  1668→                              <TableHead className="text-[10px] text-muted-foreground bg-green-50">Producto</TableHead>
+  1669→                            </TableRow>
+  1670→                          </TableHeader>
+  1671→                          <TableBody>
+  1672→                            {picks.map((row, i) => (
+  1673→                              <TableRow key={`${row.codUti}-${row.fecha}`}
+  1674→                                className="cursor-pointer hover:bg-slate-50"
+  1675→                                onClick={() => handleOperatorClick(row.codUti)}
+  1676→                              >
+  1677→                                <TableCell>
+  1678→                                  <div className="text-xs font-medium">{row.nomUti}</div>
+  1679→                                  <div className="text-[10px] text-muted-foreground">{row.codUti}</div>
+  1680→                                </TableCell>
+  1681→                                <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
+  1682→                                <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
+  1683→                                <TableCell className="text-xs text-center font-mono">{row.totalScans}</TableCell>
+  1684→                                {/* Primer pikeo */}
+  1685→                                <TableCell className="text-xs font-mono text-blue-700 bg-blue-50/50">{row.primerHora}</TableCell>
+  1686→                                <TableCell className="text-xs bg-blue-50/50">
+  1687→                                  <span className="inline-block px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 text-[10px] font-semibold">{row.primerZona || '—'}</span>
+  1688→                                </TableCell>
+  1689→                                <TableCell className="text-[10px] font-mono text-muted-foreground bg-blue-50/50 max-w-[110px] truncate">{row.primerProducto}</TableCell>
+  1690→                                {/* Jornada Bruta */}
+  1691→                                <TableCell className="text-center">
+  1692→                                  <span className="text-xs text-muted-foreground">{fmtDur(row.jornadaSec)}</span>
+  1693→                                </TableCell>
+  1694→                                {/* Descanso */}
+  1695→                                <TableCell className="text-center">
+  1696→                                  <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">-35m</span>
+  1697→                                </TableCell>
+  1698→                                {/* Jornada Efectiva */}
+  1699→                                <TableCell className="text-center">
+  1700→                                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+  1701→                                    row.jornadaEfectivaSec < 3600 ? 'bg-green-100 text-green-700'
+  1702→                                    : row.jornadaEfectivaSec < 21600 ? 'bg-amber-100 text-amber-700'
+  1703→                                    : 'bg-red-100 text-red-700'
+  1704→                                  }`}>
+  1705→                                    {fmtDur(row.jornadaEfectivaSec)}
+  1706→                                  </span>
+  1707→                                </TableCell>
+  1708→                                {/* Último pikeo */}
+  1709→                                <TableCell className="text-xs font-mono text-green-700 bg-green-50/50">{row.ultimoHora}</TableCell>
+  1710→                                <TableCell className="text-xs bg-green-50/50">
+  1711→                                  <span className="inline-block px-1.5 py-0.5 rounded bg-green-200 text-green-800 text-[10px] font-semibold">{row.ultimoZona || '—'}</span>
+  1712→                                </TableCell>
+  1713→                                <TableCell className="text-[10px] font-mono text-muted-foreground bg-green-50/50 max-w-[110px] truncate">{row.ultimoProducto}</TableCell>
+  1714→                              </TableRow>
+  1715→                            ))}
+  1716→                          </TableBody>
+  1717→                        </Table>
+  1718→                      </div>
+  1719→                      <div className="flex items-center justify-between mt-3 pt-3 border-t">
+  1720→                        <span className="text-xs text-muted-foreground">Página {picksPage} de {picksTotalPages} ({picksTotal} registros)</span>
+  1721→                        <div className="flex items-center gap-1">
+  1722→                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={picksPage <= 1} onClick={() => fetchPicks(picksPage - 1)}><ChevronLeft className="h-3 w-3" /></Button>
+  1723→                          <span className="text-xs px-2">{picksPage} / {picksTotalPages}</span>
+  1724→                          <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={picksPage >= picksTotalPages} onClick={() => fetchPicks(picksPage + 1)}><ChevronRight className="h-3 w-3" /></Button>
+  1725→                        </div>
+  1726→                      </div>
+  1727→                    </>
+  1728→                  )}
+  1729→                </CardContent>
+  1730→              </Card>
+  1731→            )}
+  1732→
+  1733→            {/* ===================== SANCIONES TAB ===================== */}
+  1734→            {activeTab === 'sanciones' && (() => {
+  1735→              const filteredSanciones = sancionTurnoFilter === 'todos'
+  1736→                ? sanciones
+  1737→                : sanciones.filter((s: any) => s.turno === sancionTurnoFilter);
+  1738→              const tmCount = sanciones.filter((s: any) => s.turno === 'TM').length;
+  1739→              const ttCount = sanciones.filter((s: any) => s.turno === 'TT').length;
+  1740→              const tnCount = sanciones.filter((s: any) => s.turno === 'TN').length;
+  1741→              const sinTurno = sanciones.filter((s: any) => !s.turno).length;
+  1742→              const totalCount = sanciones.length;
+  1743→              const uniqueOps = new Set(filteredSanciones.map((s: any) => s.codUti)).size;
+  1744→              const thisWeek = filteredSanciones.filter((s: any) => { const d = new Date(s.createdAt); const now = new Date(); return (now.getTime() - d.getTime()) / 86400000 <= 7; }).length;
+  1745→              const thisFortnight = filteredSanciones.filter((s: any) => { const d = new Date(s.createdAt); const now = new Date(); return (now.getTime() - d.getTime()) / 86400000 <= 15; }).length;
+  1746→
+  1747→              return (
+  1748→              <div className="space-y-4">
+  1749→                {/* Turno sub-tabs */}
+  1750→                <div className="flex items-center gap-1 border-b border-slate-200">
+  1751→                  <button
+  1752→                    onClick={() => setSancionTurnoFilter('todos')}
+  1753→                    className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+  1754→                      sancionTurnoFilter === 'todos' ? 'border-red-500 text-red-600' : 'border-transparent text-muted-foreground hover:text-foreground'
+  1755→                    }`}
+  1756→                  >
+  1757→                    Todos <span className="ml-1 text-[10px] text-muted-foreground">({totalCount})</span>
+  1758→                  </button>
+  1759→                  <button
+  1760→                    onClick={() => setSancionTurnoFilter('TM')}
+  1761→                    className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+  1762→                      sancionTurnoFilter === 'TM' ? 'border-amber-500 text-amber-700' : 'border-transparent text-muted-foreground hover:text-foreground'
+  1763→                    }`}
+  1764→                  >
+  1765→                    <Sun className="h-3 w-3 inline mr-1" />
+  1766→                    Mañana <span className="ml-1 text-[10px] text-muted-foreground">({tmCount})</span>
+  1767→                  </button>
+  1768→                  <button
+  1769→                    onClick={() => setSancionTurnoFilter('TT')}
+  1770→                    className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+  1771→                      sancionTurnoFilter === 'TT' ? 'border-orange-500 text-orange-700' : 'border-transparent text-muted-foreground hover:text-foreground'
+  1772→                    }`}
+  1773→                  >
+  1774→                    <Sunset className="h-3 w-3 inline mr-1" />
+  1775→                    Tarde <span className="ml-1 text-[10px] text-muted-foreground">({ttCount})</span>
+  1776→                  </button>
+  1777→                  <button
+  1778→                    onClick={() => setSancionTurnoFilter('TN')}
+  1779→                    className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+  1780→                      sancionTurnoFilter === 'TN' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-muted-foreground hover:text-foreground'
+  1781→                    }`}
+  1782→                  >
+  1783→                    <Moon className="h-3 w-3 inline mr-1" />
+  1784→                    Noche <span className="ml-1 text-[10px] text-muted-foreground">({tnCount})</span>
+  1785→                  </button>
+  1786→                  {sinTurno > 0 && (
+  1787→                    <span className="text-[10px] text-muted-foreground ml-2">({sinTurno} sin turno)</span>
+  1788→                  )}
+  1789→                </div>
+  1790→
+  1791→                {/* Summary cards */}
+  1792→                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  1793→                  <Card>
+  1794→                    <CardContent className="p-4 flex items-center gap-3">
+  1795→                      <div className="rounded-lg bg-red-500 p-2"><Shield className="h-4 w-4 text-white" /></div>
+  1796→                      <div>
+  1797→                        <p className="text-[10px] sm:text-xs text-muted-foreground">Total Sanciones</p>
+  1798→                        <p className="text-lg sm:text-2xl font-bold">{filteredSanciones.length}</p>
+  1799→                      </div>
+  1800→                    </CardContent>
+  1801→                  </Card>
+  1802→                  <Card>
+  1803→                    <CardContent className="p-4 flex items-center gap-3">
+  1804→                      <div className="rounded-lg bg-orange-500 p-2"><User className="h-4 w-4 text-white" /></div>
+  1805→                      <div>
+  1806→                        <p className="text-[10px] sm:text-xs text-muted-foreground">Operadores Sancionados</p>
+  1807→                        <p className="text-lg sm:text-2xl font-bold">{uniqueOps}</p>
+  1808→                      </div>
+  1809→                    </CardContent>
+  1810→                  </Card>
+  1811→                  <Card>
+  1812→                    <CardContent className="p-4 flex items-center gap-3">
+  1813→                      <div className="rounded-lg bg-amber-500 p-2"><Clock className="h-4 w-4 text-white" /></div>
+  1814→                      <div>
+  1815→                        <p className="text-[10px] sm:text-xs text-muted-foreground">Esta Semana</p>
+  1816→                        <p className="text-lg sm:text-2xl font-bold">{thisWeek}</p>
+  1817→                      </div>
+  1818→                    </CardContent>
+  1819→                  </Card>
+  1820→                  <Card>
+  1821→                    <CardContent className="p-4 flex items-center gap-3">
+  1822→                      <div className="rounded-lg bg-purple-500 p-2"><AlertTriangle className="h-4 w-4 text-white" /></div>
+  1823→                      <div>
+  1824→                        <p className="text-[10px] sm:text-xs text-muted-foreground">Esta Quincena</p>
+  1825→                        <p className="text-lg sm:text-2xl font-bold">{thisFortnight}</p>
+  1826→                      </div>
+  1827→                    </CardContent>
+  1828→                  </Card>
+  1829→                </div>
+  1830→
+  1831→                {/* Action buttons */}
+  1832→                <div className="flex items-center gap-2">
+  1833→                  <Button
+  1834→                    variant="outline"
+  1835→                    size="sm"
+  1836→                    className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+  1837→                    onClick={() => {
+  1838→                      const params = new URLSearchParams();
+  1839→                      if (selectedOp !== 'all') {
+  1840→                        params.set('codUti', selectedOp);
+  1841→                        params.set('nomUti', selectedOpName || '');
+  1842→                        const opStat = stats?.byOperator.find(o => o.codUti === selectedOp);
+  1843→                        params.set('turno', opStat?.turno || '');
+  1844→                        params.set('tiempoNetoMin', String(opStat?.totalNetoMin || 0));
+  1845→                        params.set('tiempoBrutoMin', String(opStat?.totalMin || 0));
+  1846→                        params.set('descansoMin', String(opStat?.descansoMin || 0));
+  1847→                        params.set('bultos', String(opStat?.totalBultos || 0));
+  1848→                      }
+  1849→                      window.open(`/sanciones?${params}`, '_blank');
+  1850→                    }}
+  1851→                  >
+  1852→                    <Shield className="h-3 w-3" />
+  1853→                    Nueva Sanción
+  1854→                  </Button>
+  1855→                  <Button
+  1856→                    variant="outline"
+  1857→                    size="sm"
+  1858→                    className="h-7 text-xs gap-1"
+  1859→                    onClick={() => window.open('/api/export-sanciones', '_blank')}
+  1860→                  >
+  1861→                    <Download className="h-3 w-3" />
+  1862→                    Descargar Excel
+  1863→                  </Button>
+  1864→                </div>
+  1865→
+  1866→                {/* History table */}
+  1867→                <Card>
+  1868→                  <CardContent className="p-4">
+  1869→                    <h3 className="text-sm font-semibold mb-3">
+  1870→                      Historial de Sanciones
+  1871→                      {sancionTurnoFilter !== 'todos' && (
+  1872→                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+  1873→                          — Filtrado: {sancionTurnoFilter === 'TM' ? 'Mañana' : sancionTurnoFilter === 'TT' ? 'Tarde' : 'Noche'}
+  1874→                        </span>
+  1875→                      )}
+  1876→                    </h3>
+  1877→                    {sancionesLoading ? (
+  1878→                      <div className="flex items-center justify-center py-12">
+  1879→                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  1880→                        <span className="ml-2 text-sm text-muted-foreground">Cargando...</span>
+  1881→                      </div>
+  1882→                    ) : filteredSanciones.length === 0 ? (
+  1883→                      <div className="text-center py-12 text-sm text-muted-foreground">
+  1884→                        {sancionTurnoFilter === 'todos' ? 'No hay sanciones registradas' : `No hay sanciones para el turno ${sancionTurnoFilter}`}
+  1885→                      </div>
+  1886→                    ) : (
+  1887→                      <div className="overflow-x-auto">
+  1888→                        <Table>
+  1889→                          <TableHeader>
+  1890→                            <TableRow>
+  1891→                              <TableHead className="text-xs">Fecha</TableHead>
+  1892→                              <TableHead className="text-xs">Legajo</TableHead>
+  1893→                              <TableHead className="text-xs">Nombre</TableHead>
+  1894→                              <TableHead className="text-xs text-center">Turno</TableHead>
+  1895→                              <TableHead className="text-xs text-right">T. Neto</TableHead>
+  1896→                              <TableHead className="text-xs">Fecha Med.</TableHead>
+  1897→                              <TableHead className="text-xs text-center">Sanc.</TableHead>
+  1898→                              <TableHead className="text-xs">Ultima Sanc.</TableHead>
+  1899→                              <TableHead className="text-xs w-10"></TableHead>
+  1900→                            </TableRow>
+  1901→                          </TableHeader>
+  1902→                          <TableBody>
+  1903→                            {filteredSanciones.slice(0, 50).map((s: any, i: number) => {
+  1904→                              const counts = sancionesCounts[s.codUti];
+  1905→                              return (
+  1906→                                <TableRow
+  1907→                                  key={s.id}
+  1908→                                  className={`${i === 0 ? 'bg-red-50 hover:bg-red-100/70' : 'cursor-pointer hover:bg-slate-50'}`}
+  1909→                                  onClick={() => {
+  1910→                                    setSelectedOp(s.codUti);
+  1911→                                    setActiveTab('operador');
+  1912→                                  }}
+  1913→                                >
+  1914→                                  <TableCell className="text-xs whitespace-nowrap">
+  1915→                                    {s.createdAt ? s.createdAt.split('T')[0] : ''}
+  1916→                                  </TableCell>
+  1917→                                  <TableCell className="text-xs font-mono">{s.codUti}</TableCell>
+  1918→                                  <TableCell className="text-xs">{s.nomUti}</TableCell>
+  1919→                                  <TableCell className="text-center">
+  1920→                                    {s.turno && <TurnoBadge turno={s.turno} />}
+  1921→                                  </TableCell>
+  1922→                                  <TableCell className="text-xs text-right font-bold text-red-600">
+  1923→                                    {s.tiempoNeto != null ? `${s.tiempoNeto} min` : '—'}
+  1924→                                  </TableCell>
+  1925→                                  <TableCell className="text-xs whitespace-nowrap">{s.fechaMedicion || ''}</TableCell>
+  1926→                                  <TableCell className="text-xs text-center">
+  1927→                                    <span className="inline-flex items-center justify-center bg-red-100 text-red-700 text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5">
+  1928→                                      {counts?.count || 0}
+  1929→                                    </span>
+  1930→                                  </TableCell>
+  1931→                                  <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
+  1932→                                    {counts?.lastDate || '—'}
+  1933→                                  </TableCell>
+  1934→                                  <TableCell className="text-center">
+  1935→                                    <button
+  1936→                                      onClick={(e) => handleDeleteSancion(s.id, e)}
+  1937→                                      className="p-1 rounded hover:bg-red-100 text-slate-400 hover:text-red-600 transition-colors"
+  1938→                                      title="Eliminar sancion"
+  1939→                                    >
+  1940→                                      <Trash2 className="h-3 w-3" />
+  1941→                                    </button>
+  1942→                                  </TableCell>
+  1943→                                </TableRow>
+  1944→                              );
+  1945→                            })}
+  1946→                          </TableBody>
+  1947→                        </Table>
+  1948→                      </div>
+  1949→                    )}
+  1950→                  </CardContent>
+  1951→                </Card>
+  1952→              </div>
+  1953→              );
+  1954→            })()}
+  1955→          </>
+  1956→        )}
+  1957→
+  1958→      </main>
+  1959→
+  1960→      <footer className="mt-auto border-t bg-white/60">
+  1961→        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6">
+  1962→          <p className="text-center text-[10px] text-muted-foreground">
+  1963→            Umbral: &gt;5 min = tiempo muerto — TM (6-14hs) TT (14-22hs) TN (resto)
+  1964→          </p>
+  1965→        </div>
+  1966→      </footer>
+  1967→    </div>
+  1968→  );
+  1969→}
