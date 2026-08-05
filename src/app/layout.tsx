@@ -16,9 +16,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Tiempos Muertos Operativos",
   description: "Dashboard de análisis de tiempos muertos operativos en tiempo real",
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
 };
 
 export default function RootLayout({
