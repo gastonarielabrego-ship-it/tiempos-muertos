@@ -94,6 +94,23 @@ export default function SancionesForm() {
   const [saving, setSaving] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
 
+  // Group gaps by fecha, keeping order within each day
+  const gapsByDate = React.useMemo(() => {
+    const map = new Map<string, GapItem[]>();
+    for (const g of gaps) {
+      const list = map.get(g.fecha) || [];
+      list.push(g);
+      map.set(g.fecha, list);
+    }
+    // Sort dates descending
+    const entries = Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+    return entries.map(([fecha, items]) => {
+      const totalSec = items.reduce((s, g) => s + g.gapSeconds, 0);
+      const totalMin = Math.round(totalSec / 60 * 10) / 10;
+      return { fecha, items, totalSec, totalMin, count: items.length };
+    });
+  }, [gaps]);
+
   useEffect(() => {
     async function loadData() {
       try {
@@ -131,9 +148,12 @@ export default function SancionesForm() {
   const lastError = useRef<string>('');
 
   const collectAndSend = async (): Promise<boolean> => {
-    const evidencia = gaps.map(g =>
-      `${g.fecha} | ${g.prevHora} - ${g.currHora} | ${fmtSec(g.gapSeconds)} | ${g.prevZonSts || '?'} -> ${g.currZonSts || '?'} | ${g.prevCodPro} -> ${g.currCodPro}`
-    ).join('\n');
+    const evidencia = gapsByDate.map(day =>
+      `=== ${day.fecha} (${day.count} eventos - ${minToHM(day.totalMin)}) ===\n` +
+      day.items.map(g =>
+        `  ${g.prevHora} - ${g.currHora} | ${fmtSec(g.gapSeconds)} | ${g.prevZonSts || '?'} -> ${g.currZonSts || '?'} | ${g.prevCodPro} -> ${g.currCodPro} (Bul: ${g.prevBultos} -> ${g.currBultos})`
+      ).join('\n')
+    ).join('\n\n');
 
     const body = {
       codUti, nomUti, turno,
@@ -416,62 +436,76 @@ export default function SancionesForm() {
               </div>
             </div>
 
-            {/* Gaps detail - Screen view */}
+            {/* Gaps detail - Screen view (grouped by date) */}
             <div className="p-3 print:hidden">
               {gaps.length > 0 ? (
-                <textarea
-                  className="w-full border border-slate-300 rounded-sm p-2 text-[10px] font-mono leading-relaxed bg-white"
-                  rows={Math.min(gaps.length + 3, 18)}
-                  readOnly
-                  value={
-                    '#  Fecha       | Hora Inicio | Hora Fin   | Duracion  | Bul.Ant | Bul.Pos | Zona O. -> Zona D. | Producto\n' +
-                    '---|------------|-------------|------------|-----------|---------|---------|--------------------|----------\n' +
-                    gaps.map((g, i) =>
-                      `${String(i + 1).padStart(2)}  ${g.fecha} | ${g.prevHora}    | ${g.currHora}    | ${fmtSec(g.gapSeconds).padEnd(9)} | ${String(g.prevBultos).padEnd(6)} | ${String(g.currBultos).padEnd(6)} | ${(g.prevZonSts || '?').padEnd(8)} -> ${(g.currZonSts || '?').padEnd(8)} | ${g.prevCodPro}`
-                    ).join('\n')
-                  }
-                />
+                gapsByDate.map(day => (
+                  <div key={day.fecha} className="mb-3 last:mb-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">{day.fecha}</span>
+                      <span className="text-[9px] text-muted-foreground">{day.count} evento(s)</span>
+                      <span className="text-[9px] font-bold text-red-600">{minToHM(day.totalMin)}</span>
+                    </div>
+                    <textarea
+                      className="w-full border border-slate-300 rounded-sm p-2 text-[10px] font-mono leading-relaxed bg-white"
+                      rows={Math.min(day.items.length + 2, 12)}
+                      readOnly
+                      value={
+                        '#  Hora Inicio | Hora Fin   | Duracion  | Bul.Ant | Bul.Pos | Zona O. -> Zona D. | Producto\n' +
+                        '---|-------------|------------|-----------|---------|---------|--------------------|----------\n' +
+                        day.items.map((g, i) =>
+                          `${String(i + 1).padStart(2)}  ${g.prevHora}    | ${g.currHora}    | ${fmtSec(g.gapSeconds).padEnd(9)} | ${String(g.prevBultos).padEnd(6)} | ${String(g.currBultos).padEnd(6)} | ${(g.prevZonSts || '?').padEnd(8)} -> ${(g.currZonSts || '?').padEnd(8)} | ${g.prevCodPro}`
+                        ).join('\n')
+                      }
+                    />
+                  </div>
+                ))
               ) : (
                 <p className="text-[10px] text-slate-400 italic">Sin eventos de tiempo muerto registrados para este operador.</p>
               )}
             </div>
 
-            {/* Gaps detail - Print view */}
+            {/* Gaps detail - Print view (grouped by date) */}
             <div className="hidden print:block p-3">
-              {gaps.length > 0 && (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid #333' }}>
-                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center', width: '20px' }}>#</th>
-                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'left' }}>Fecha</th>
-                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Inicio</th>
-                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Fin</th>
-                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Duracion</th>
-                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Bul.Ant</th>
-                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Bul.Pos</th>
-                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Zona O.</th>
-                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'center' }}>Zona D.</th>
-                      <th style={{ border: '1px solid #999', padding: '2px 4px', textAlign: 'left' }}>Producto</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gaps.map((g, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid #ddd' }}>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{i + 1}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px' }}>{g.fecha}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.prevHora}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.currHora}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center', fontWeight: 'bold' }}>{fmtSec(g.gapSeconds)}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.prevBultos}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.currBultos}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.prevZonSts || '-'}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{g.currZonSts || '-'}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px' }}>{g.prevCodPro}</td>
+              {gapsByDate.map(day => (
+                <div key={day.fecha} style={{ marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px', borderBottom: '1px solid #666', paddingBottom: '2px' }}>
+                    <span style={{ fontSize: '9px', fontWeight: 'bold', background: '#f1f5f9', padding: '1px 6px', borderRadius: '2px' }}>{day.fecha}</span>
+                    <span style={{ fontSize: '8px', color: '#666' }}>{day.count} evento(s)</span>
+                    <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#dc2626' }}>{minToHM(day.totalMin)}</span>
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #999' }}>
+                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center', width: '18px' }}>#</th>
+                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Inicio</th>
+                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Fin</th>
+                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Duracion</th>
+                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Bul.Ant</th>
+                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Bul.Pos</th>
+                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Zona O.</th>
+                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Zona D.</th>
+                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'left' }}>Producto</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                    </thead>
+                    <tbody>
+                      {day.items.map((g, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #ddd' }}>
+                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{i + 1}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.prevHora}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.currHora}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center', fontWeight: 'bold' }}>{fmtSec(g.gapSeconds)}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.prevBultos}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.currBultos}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.prevZonSts || '-'}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.currZonSts || '-'}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '1px 2px' }}>{g.prevCodPro}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
               {tmInf && tmInf.totalMinutos > 0 && (
                 <p style={{ fontSize: '8px', marginTop: '4px', color: '#7c3aed' }}>
                   Tiempos Muertos Informados: {tmInf.totalMinutos} min en {tmInf.registros} evento(s)
