@@ -769,7 +769,22 @@ export default function DashboardPage() {
                       }}
                     >
                       <Shield className="h-3 w-3" />
-                      Sanción
+                      Sanción Tiempo
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 border-blue-300 text-blue-600 hover:bg-blue-50"
+                      onClick={() => {
+                        const params = new URLSearchParams();
+                        params.set('codUti', selectedOp);
+                        params.set('nomUti', selectedOpName || '');
+                        params.set('turno', selectedOpStats.turno);
+                        window.open(`/sanciones-inicio?${params}`, '_blank');
+                      }}
+                    >
+                      <PlayCircle className="h-3 w-3" />
+                      Sanción Inicio
                     </Button>
                   </div>
                   <div className="space-y-1.5 text-sm">
@@ -1862,7 +1877,25 @@ export default function DashboardPage() {
                     }}
                   >
                     <Shield className="h-3 w-3" />
-                    Nueva Sanción
+                    Sanc. Tiempo
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1 border-blue-300 text-blue-600 hover:bg-blue-50"
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      if (selectedOp !== 'all') {
+                        params.set('codUti', selectedOp);
+                        params.set('nomUti', selectedOpName || '');
+                        const opStat = stats?.byOperator.find(o => o.codUti === selectedOp);
+                        params.set('turno', opStat?.turno || '');
+                      }
+                      window.open(`/sanciones-inicio?${params}`, '_blank');
+                    }}
+                  >
+                    <PlayCircle className="h-3 w-3" />
+                    Sanc. Inicio
                   </Button>
                   <Button
                     variant="outline"
@@ -1904,6 +1937,7 @@ export default function DashboardPage() {
                               <TableHead className="text-xs">Legajo</TableHead>
                               <TableHead className="text-xs">Nombre</TableHead>
                               <TableHead className="text-xs text-center">Turno</TableHead>
+                              <TableHead className="text-xs text-center">Tipo</TableHead>
                               <TableHead className="text-xs text-right">T. Neto</TableHead>
                               <TableHead className="text-xs">Fecha Med.</TableHead>
                               <TableHead className="text-xs text-center">Sanc.</TableHead>
@@ -1930,6 +1964,11 @@ export default function DashboardPage() {
                                   <TableCell className="text-xs">{s.nomUti}</TableCell>
                                   <TableCell className="text-center">
                                     {s.turno && <TurnoBadge turno={s.turno} />}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${s.tipo === 'inicio-tardio' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                      {s.tipo === 'inicio-tardio' ? 'Inicio' : 'Tiempo'}
+                                    </span>
                                   </TableCell>
                                   <TableCell className="text-xs text-right font-bold text-red-600">
                                     {s.tiempoNeto != null ? `${s.tiempoNeto} min` : '—'}

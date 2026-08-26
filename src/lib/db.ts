@@ -250,6 +250,10 @@ async function ensureTables() {
     try {
       await tursoQuery(`ALTER TABLE "Sancion" ADD COLUMN "bultos" INTEGER`);
     } catch { /* column already exists */ }
+    // Add tipo column if missing
+    try {
+      await tursoQuery(`ALTER TABLE "Sancion" ADD COLUMN "tipo" TEXT`);
+    } catch { /* column already exists */ }
     await tursoQuery(`
       CREATE TABLE IF NOT EXISTS "Indicador" (
         "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

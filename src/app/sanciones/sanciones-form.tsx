@@ -20,18 +20,6 @@ interface GapItem {
 
 interface TmInfData { totalMinutos: number; registros: number; }
 
-interface PickDayInfo {
-  fecha: string;
-  totalScans: number;
-  primerHora: string;
-  primerZona: string | null;
-  primerProducto: string;
-  ultimoHora: string;
-  ultimoZona: string | null;
-  ultimoProducto: string;
-  jornadaSec: number;
-  jornadaEfectivaSec: number;
-}
 
 function fmtSec(s: number): string {
   const h = Math.floor(s / 3600);
@@ -102,7 +90,6 @@ export default function SancionesForm() {
 
   const [gaps, setGaps] = useState<GapItem[]>([]);
   const [tmInf, setTmInf] = useState<TmInfData | null>(null);
-  const [picksInfo, setPicksInfo] = useState<PickDayInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [printing, setPrinting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -125,19 +112,14 @@ export default function SancionesForm() {
     });
   }, [gaps]);
 
-  // Sort picks by fecha descending for display
-  const picksSorted = React.useMemo(() => {
-    return [...picksInfo].sort((a, b) => b.fecha.localeCompare(a.fecha));
-  }, [picksInfo]);
 
   useEffect(() => {
     async function loadData() {
       try {
         const params = new URLSearchParams({ operator: codUti, pageSize: '999' });
-        const [movRes, tmInfRes, picksRes] = await Promise.all([
+        const [movRes, tmInfRes] = await Promise.all([
           fetch(`/api/movements?${params}`),
           fetch('/api/tm-informados'),
-          fetch(`/api/picks?operator=${codUti}&pageSize=999`),
         ]);
         const movData = await movRes.json();
         if (movData.rows) {
@@ -147,17 +129,6 @@ export default function SancionesForm() {
             prevCodPro: r.prevCodPro || '', currCodPro: r.currCodPro || '',
             prevBultos: r.prevBultos || 0, currBultos: r.currBultos || 0,
           })));
-        }
-        if (picksRes.ok) {
-          const picksData = await picksRes.json();
-          if (picksData.rows) {
-            setPicksInfo(picksData.rows.map((r: any) => ({
-              fecha: r.fecha, totalScans: r.totalScans,
-              primerHora: r.primerHora, primerZona: r.primerZona, primerProducto: r.primerProducto || '',
-              ultimoHora: r.ultimoHora, ultimoZona: r.ultimoZona, ultimoProducto: r.ultimoProducto || '',
-              jornadaSec: r.jornadaSec, jornadaEfectivaSec: r.jornadaEfectivaSec,
-            })));
-          }
         }
         if (tmInfRes.ok) {
           const tmData = await tmInfRes.json();
@@ -186,11 +157,7 @@ export default function SancionesForm() {
       ).join('\n')
     ).join('\n\n');
 
-    const pikeoInfo = picksSorted.map(p =>
-      `${p.fecha} | ${p.totalScans} esc | 1ro: ${p.primerHora} ${p.primerZona || ''} ${p.primerProducto || ''} | Ult: ${p.ultimoHora} ${p.ultimoZona || ''} ${p.ultimoProducto || ''} | Efectiva: ${fmtSec(p.jornadaEfectivaSec)}`
-    ).join('\n');
-
-    const fullEvidencia = (pikeoInfo ? 'PIKEOS:\n' + pikeoInfo + '\n\n' : '') + 'TIEMPOS MUERTOS:\n' + evidencia;
+    const fullEvidencia = 'TIEMPOS MUERTOS:\n' + evidencia;
 
     const body = {
       codUti, nomUti, turno,
@@ -200,6 +167,7 @@ export default function SancionesForm() {
       sectorCoordinador: (document.getElementById('coordSector') as HTMLInputElement)?.value || '',
       rrhh: (document.getElementById('rrhhNombre') as HTMLInputElement)?.value || '',
       evidencia: fullEvidencia,
+      tipo: 'tiempo',
       comentariosColaborador: (document.getElementById('comentColab') as HTMLTextAreaElement)?.value || '',
       comentariosCoordinador: (document.getElementById('comentCoord') as HTMLTextAreaElement)?.value || '',
       sugerencias: (document.getElementById('sugerencias') as HTMLTextAreaElement)?.value || '',
@@ -333,7 +301,7 @@ export default function SancionesForm() {
         {/* ─── TITLE ─── */}
         <div className="text-center mt-2 mb-4 print:mt-3 print:mb-4 print:mx-[15mm]">
           <h1 className="text-sm font-bold tracking-wider print:text-[14pt] uppercase">
-            Pedido de Explicacion Preparacion STD
+            Pedido de Explicacion - Tiempo Muerto
           </h1>
         </div>
 
@@ -473,103 +441,6 @@ export default function SancionesForm() {
               </div>
             </div>
 
-            {/* ─── SECTION A: Primer y Ultimo Pikeo ─── */}
-            {picksInfo.length > 0 && (
-            <div className="p-3 border-b border-slate-300">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-[11px] font-bold print:text-[12pt] text-blue-700">Primer y Ultimo Pikeo por Dia</span>
-              </div>
-
-              {/* Screen view */}
-              <div className="print:hidden overflow-x-auto">
-                <table className="w-full border-collapse text-[9px]">
-                  <thead>
-                    <tr className="bg-blue-50">
-                      <th className="border border-blue-200 px-2 py-1 text-left font-semibold text-blue-800">Fecha</th>
-                      <th className="border border-blue-200 px-2 py-1 text-center font-semibold text-blue-800">Escaneos</th>
-                      <th className="border border-blue-200 px-2 py-1 text-center font-semibold text-blue-800" colSpan={3}>Primer Pikeo</th>
-                      <th className="border border-blue-200 px-2 py-1 text-center font-semibold text-blue-800">Jornada</th>
-                      <th className="border border-blue-200 px-2 py-1 text-center font-semibold text-blue-800">Efectiva</th>
-                      <th className="border border-blue-200 px-2 py-1 text-center font-semibold text-green-800" colSpan={3}>Ultimo Pikeo</th>
-                    </tr>
-                    <tr className="bg-blue-50/50">
-                      <th className="border border-blue-100"></th>
-                      <th className="border border-blue-100"></th>
-                      <th className="border border-blue-100 text-[8px] text-blue-500">Hora</th>
-                      <th className="border border-blue-100 text-[8px] text-blue-500">Zona</th>
-                      <th className="border border-blue-100 text-[8px] text-blue-500">Producto</th>
-                      <th className="border border-blue-100"></th>
-                      <th className="border border-blue-100"></th>
-                      <th className="border border-blue-100 text-[8px] text-green-500">Hora</th>
-                      <th className="border border-green-100 text-[8px] text-green-500">Zona</th>
-                      <th className="border border-green-100 text-[8px] text-green-500">Producto</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {picksSorted.map(p => (
-                      <tr key={p.fecha} className="hover:bg-slate-50">
-                        <td className="border border-slate-200 px-2 py-1 font-medium">{p.fecha}</td>
-                        <td className="border border-slate-200 px-2 py-1 text-center font-mono font-bold">{p.totalScans}</td>
-                        <td className="border border-slate-200 px-2 py-1 text-center font-mono text-blue-700 bg-blue-50/30">{p.primerHora}</td>
-                        <td className="border border-slate-200 px-2 py-1 text-center bg-blue-50/30">
-                          <span className="inline-block px-1 py-0.5 rounded bg-blue-200 text-blue-800 text-[8px] font-semibold">{p.primerZona || '—'}</span>
-                        </td>
-                        <td className="border border-slate-200 px-2 py-1 text-center font-mono text-[8px] text-blue-600 max-w-[100px] truncate">{p.primerProducto || '—'}</td>
-                        <td className="border border-slate-200 px-2 py-1 text-center text-muted-foreground">{fmtSec(p.jornadaSec)}</td>
-                        <td className="border border-slate-200 px-2 py-1 text-center font-medium">{fmtSec(p.jornadaEfectivaSec)}</td>
-                        <td className="border border-slate-200 px-2 py-1 text-center font-mono text-green-700 bg-green-50/30">{p.ultimoHora}</td>
-                        <td className="border border-slate-200 px-2 py-1 text-center bg-green-50/30">
-                          <span className="inline-block px-1 py-0.5 rounded bg-green-200 text-green-800 text-[8px] font-semibold">{p.ultimoZona || '—'}</span>
-                        </td>
-                        <td className="border border-slate-200 px-2 py-1 text-center font-mono text-[8px] text-green-600 max-w-[100px] truncate">{p.ultimoProducto || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Print view */}
-              <div className="hidden print:block">
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid #999' }}>
-                      <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'left' }}>Fecha</th>
-                      <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Esc.</th>
-                      <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center', color: '#2563eb' }} colSpan={3}>Primer Pikeo</th>
-                      <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Efectiva</th>
-                      <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center', color: '#16a34a' }} colSpan={3}>Ultimo Pikeo</th>
-                    </tr>
-                    <tr>
-                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#666' }}></th>
-                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#666' }}></th>
-                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#60a5fa' }}>Hora</th>
-                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#60a5fa' }}>Zona</th>
-                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#60a5fa' }}>Producto</th>
-                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#666' }}></th>
-                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#4ade80' }}>Hora</th>
-                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#4ade80' }}>Zona</th>
-                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#4ade80' }}>Producto</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {picksSorted.map(p => (
-                      <tr key={p.fecha} style={{ borderBottom: '1px solid #ddd' }}>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px' }}>{p.fecha}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center', fontWeight: 'bold' }}>{p.totalScans}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center', color: '#2563eb' }}>{p.primerHora}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{p.primerZona || '-'}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px' }}>{p.primerProducto || '-'}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{fmtSec(p.jornadaEfectivaSec)}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center', color: '#16a34a' }}>{p.ultimoHora}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{p.ultimoZona || '-'}</td>
-                        <td style={{ border: '1px solid #ddd', padding: '1px 3px' }}>{p.ultimoProducto || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            )}
 
             {/* ─── SECTION B: Tiempos Muertos (Gaps) ─── */}
             {gaps.length > 0 && (

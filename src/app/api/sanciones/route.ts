@@ -17,6 +17,7 @@ export async function GET() {
       codUti: String(r.codUti),
       nomUti: String(r.nomUti),
       turno: r.turno ? String(r.turno) : null,
+      tipo: r.tipo ? String(r.tipo) : null,
       tiempoNeto: r.tiempoNeto ? Number(r.tiempoNeto) : null,
       fechaMedicion: r.fechaMedicion ? String(r.fechaMedicion) : null,
       coordinador: r.coordinador ? String(r.coordinador) : null,
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { codUti, nomUti, turno, tiempoNeto, bultos, fechaMedicion, coordinador, sectorCoordinador, rrhh, evidencia, comentariosColaborador, comentariosCoordinador, sugerencias } = body;
+    const { codUti, nomUti, turno, tipo, tiempoNeto, bultos, fechaMedicion, coordinador, sectorCoordinador, rrhh, evidencia, comentariosColaborador, comentariosCoordinador, sugerencias } = body;
 
     if (!codUti || !nomUti) {
       return NextResponse.json({ error: 'codUti y nomUti son requeridos' }, { status: 400 });
@@ -66,12 +67,13 @@ export async function POST(request: NextRequest) {
     const toStr = (v: unknown) => (v !== null && v !== undefined && v !== '') ? String(v) : '';
 
     await tursoQuery(
-      `INSERT INTO "Sancion" ("codUti","nomUti","turno","tiempoNeto","bultos","fechaMedicion","coordinador","sectorCoordinador","rrhh","evidencia","comentariosColaborador","comentariosCoordinador","sugerencias")
+      `INSERT INTO "Sancion" ("codUti","nomUti","turno","tipo","tiempoNeto","bultos","fechaMedicion","coordinador","sectorCoordinador","rrhh","evidencia","comentariosColaborador","comentariosCoordinador","sugerencias")
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         String(codUti),
         String(nomUti),
         toStr(turno),
+        toStr(tipo),
         tiempoNeto !== null && tiempoNeto !== undefined ? Number(tiempoNeto) : null,
         bultos !== null && bultos !== undefined ? Number(bultos) : null,
         toStr(fechaMedicion),
