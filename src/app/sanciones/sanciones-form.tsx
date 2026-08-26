@@ -20,6 +20,19 @@ interface GapItem {
 
 interface TmInfData { totalMinutos: number; registros: number; }
 
+interface PickDayInfo {
+  fecha: string;
+  totalScans: number;
+  primerHora: string;
+  primerZona: string | null;
+  primerProducto: string;
+  ultimoHora: string;
+  ultimoZona: string | null;
+  ultimoProducto: string;
+  jornadaSec: number;
+  jornadaEfectivaSec: number;
+}
+
 function fmtSec(s: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
@@ -89,6 +102,7 @@ export default function SancionesForm() {
 
   const [gaps, setGaps] = useState<GapItem[]>([]);
   const [tmInf, setTmInf] = useState<TmInfData | null>(null);
+  const [picksInfo, setPicksInfo] = useState<PickDayInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [printing, setPrinting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -111,13 +125,23 @@ export default function SancionesForm() {
     });
   }, [gaps]);
 
+  // Map picks info by fecha for quick lookup
+  const picksByFecha = React.useMemo(() => {
+    const map = new Map<string, PickDayInfo>();
+    for (const p of picksInfo) {
+      map.set(p.fecha, p);
+    }
+    return map;
+  }, [picksInfo]);
+
   useEffect(() => {
     async function loadData() {
       try {
         const params = new URLSearchParams({ operator: codUti, pageSize: '999' });
-        const [movRes, tmInfRes] = await Promise.all([
+        const [movRes, tmInfRes, picksRes] = await Promise.all([
           fetch(`/api/movements?${params}`),
           fetch('/api/tm-informados'),
+          fetch(`/api/picks?operator=${codUti}&pageSize=999`),
         ]);
         const movData = await movRes.json();
         if (movData.rows) {
@@ -127,6 +151,17 @@ export default function SancionesForm() {
             prevCodPro: r.prevCodPro || '', currCodPro: r.currCodPro || '',
             prevBultos: r.prevBultos || 0, currBultos: r.currBultos || 0,
           })));
+        }
+        if (picksRes.ok) {
+          const picksData = await picksRes.json();
+          if (picksData.rows) {
+            setPicksInfo(picksData.rows.map((r: any) => ({
+              fecha: r.fecha, totalScans: r.totalScans,
+              primerHora: r.primerHora, primerZona: r.primerZona, primerProducto: r.primerProducto || '',
+              ultimoHora: r.ultimoHora, ultimoZona: r.ultimoZona, ultimoProducto: r.ultimoProducto || '',
+              jornadaSec: r.jornadaSec, jornadaEfectivaSec: r.jornadaEfectivaSec,
+            })));
+          }
         }
         if (tmInfRes.ok) {
           const tmData = await tmInfRes.json();
@@ -148,12 +183,18 @@ export default function SancionesForm() {
   const lastError = useRef<string>('');
 
   const collectAndSend = async (): Promise<boolean> => {
-    const evidencia = gapsByDate.map(day =>
-      `=== ${day.fecha} (${day.count} eventos - ${minToHM(day.totalMin)}) ===\n` +
-      day.items.map(g =>
-        `  ${g.prevHora} - ${g.currHora} | ${fmtSec(g.gapSeconds)} | ${g.prevZonSts || '?'} -> ${g.currZonSts || '?'} | ${g.prevCodPro} -> ${g.currCodPro} (Bul: ${g.prevBultos} -> ${g.currBultos})`
-      ).join('\n')
-    ).join('\n\n');
+    const evidencia = gapsByDate.map(day => {
+      const pick = picksByFecha.get(day.fecha);
+      let header = `=== ${day.fecha} (${day.count} eventos - ${minToHM(day.totalMin)})`;
+      if (pick) {
+        header += ` | ${pick.totalScans} esc | 1ro: ${pick.primerHora} ${pick.primerZona || ''} | Ult: ${pick.ultimoHora} ${pick.ultimoZona || ''} | Efectiva: ${fmtSec(pick.jornadaEfectivaSec)}`;
+      }
+      header += ' ===';
+      return header + '\n' +
+        day.items.map(g =>
+          `  ${g.prevHora} - ${g.currHora} | ${fmtSec(g.gapSeconds)} | ${g.prevZonSts || '?'} -> ${g.currZonSts || '?'} | ${g.prevCodPro} -> ${g.currCodPro} (Bul: ${g.prevBultos} -> ${g.currBultos})`
+        ).join('\n');
+    }).join('\n\n');
 
     const body = {
       codUti, nomUti, turno,
@@ -439,13 +480,28 @@ export default function SancionesForm() {
             {/* Gaps detail - Screen view (grouped by date) */}
             <div className="p-3 print:hidden">
               {gaps.length > 0 ? (
-                gapsByDate.map(day => (
+                gapsByDate.map(day => {
+                  const pick = picksByFecha.get(day.fecha);
+                  return (
                   <div key={day.fecha} className="mb-3 last:mb-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">{day.fecha}</span>
                       <span className="text-[9px] text-muted-foreground">{day.count} evento(s)</span>
                       <span className="text-[9px] font-bold text-red-600">{minToHM(day.totalMin)}</span>
                     </div>
+                    {pick && (
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-1.5 px-1 text-[9px] bg-slate-50 rounded-sm p-1.5 border border-slate-200">
+                        <span className="font-semibold text-slate-600">{pick.totalScans} escaneos</span>
+                        <span className="text-blue-600 font-medium">
+                          <span className="text-blue-400">1ro:</span> {pick.primerHora} {pick.primerZona ? `(${pick.primerZona})` : ''} {pick.primerProducto ? `[${pick.primerProducto}]` : ''}
+                        </span>
+                        <span className="text-green-600 font-medium">
+                          <span className="text-green-400">Ult:</span> {pick.ultimoHora} {pick.ultimoZona ? `(${pick.ultimoZona})` : ''} {pick.ultimoProducto ? `[${pick.ultimoProducto}]` : ''}
+                        </span>
+                        <span className="text-muted-foreground">Jornada: {fmtSec(pick.jornadaSec)}</span>
+                        <span className="text-muted-foreground">Efectiva: {fmtSec(pick.jornadaEfectivaSec)}</span>
+                      </div>
+                    )}
                     <textarea
                       className="w-full border border-slate-300 rounded-sm p-2 text-[10px] font-mono leading-relaxed bg-white"
                       rows={Math.min(day.items.length + 2, 12)}
@@ -459,7 +515,8 @@ export default function SancionesForm() {
                       }
                     />
                   </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="text-[10px] text-slate-400 italic">Sin eventos de tiempo muerto registrados para este operador.</p>
               )}
@@ -467,12 +524,22 @@ export default function SancionesForm() {
 
             {/* Gaps detail - Print view (grouped by date) */}
             <div className="hidden print:block p-3">
-              {gapsByDate.map(day => (
+              {gapsByDate.map(day => {
+                const pick = picksByFecha.get(day.fecha);
+                return (
                 <div key={day.fecha} style={{ marginBottom: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px', borderBottom: '1px solid #666', paddingBottom: '2px' }}>
                     <span style={{ fontSize: '9px', fontWeight: 'bold', background: '#f1f5f9', padding: '1px 6px', borderRadius: '2px' }}>{day.fecha}</span>
                     <span style={{ fontSize: '8px', color: '#666' }}>{day.count} evento(s)</span>
                     <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#dc2626' }}>{minToHM(day.totalMin)}</span>
+                    {pick && (
+                      <>
+                        <span style={{ fontSize: '8px', color: '#475569', marginLeft: '4px' }}>{pick.totalScans} esc.</span>
+                        <span style={{ fontSize: '8px', color: '#2563eb' }}>1ro: {pick.primerHora} {pick.primerZona || ''}</span>
+                        <span style={{ fontSize: '8px', color: '#16a34a' }}>Ult: {pick.ultimoHora} {pick.ultimoZona || ''}</span>
+                        <span style={{ fontSize: '7px', color: '#94a3b8' }}>Efectiva: {fmtSec(pick.jornadaEfectivaSec)}</span>
+                      </>
+                    )}
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px' }}>
                     <thead>
@@ -505,7 +572,8 @@ export default function SancionesForm() {
                     </tbody>
                   </table>
                 </div>
-              ))}
+                );
+              })}
               {tmInf && tmInf.totalMinutos > 0 && (
                 <p style={{ fontSize: '8px', marginTop: '4px', color: '#7c3aed' }}>
                   Tiempos Muertos Informados: {tmInf.totalMinutos} min en {tmInf.registros} evento(s)
