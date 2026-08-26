@@ -125,13 +125,9 @@ export default function SancionesForm() {
     });
   }, [gaps]);
 
-  // Map picks info by fecha for quick lookup
-  const picksByFecha = React.useMemo(() => {
-    const map = new Map<string, PickDayInfo>();
-    for (const p of picksInfo) {
-      map.set(p.fecha, p);
-    }
-    return map;
+  // Sort picks by fecha descending for display
+  const picksSorted = React.useMemo(() => {
+    return [...picksInfo].sort((a, b) => b.fecha.localeCompare(a.fecha));
   }, [picksInfo]);
 
   useEffect(() => {
@@ -183,18 +179,18 @@ export default function SancionesForm() {
   const lastError = useRef<string>('');
 
   const collectAndSend = async (): Promise<boolean> => {
-    const evidencia = gapsByDate.map(day => {
-      const pick = picksByFecha.get(day.fecha);
-      let header = `=== ${day.fecha} (${day.count} eventos - ${minToHM(day.totalMin)})`;
-      if (pick) {
-        header += ` | ${pick.totalScans} esc | 1ro: ${pick.primerHora} ${pick.primerZona || ''} | Ult: ${pick.ultimoHora} ${pick.ultimoZona || ''} | Efectiva: ${fmtSec(pick.jornadaEfectivaSec)}`;
-      }
-      header += ' ===';
-      return header + '\n' +
-        day.items.map(g =>
-          `  ${g.prevHora} - ${g.currHora} | ${fmtSec(g.gapSeconds)} | ${g.prevZonSts || '?'} -> ${g.currZonSts || '?'} | ${g.prevCodPro} -> ${g.currCodPro} (Bul: ${g.prevBultos} -> ${g.currBultos})`
-        ).join('\n');
-    }).join('\n\n');
+    const evidencia = gapsByDate.map(day =>
+      `=== ${day.fecha} (${day.count} eventos - ${minToHM(day.totalMin)}) ===\n` +
+      day.items.map(g =>
+        `  ${g.prevHora} - ${g.currHora} | ${fmtSec(g.gapSeconds)} | ${g.prevZonSts || '?'} -> ${g.currZonSts || '?'} | ${g.prevCodPro} -> ${g.currCodPro} (Bul: ${g.prevBultos} -> ${g.currBultos})`
+      ).join('\n')
+    ).join('\n\n');
+
+    const pikeoInfo = picksSorted.map(p =>
+      `${p.fecha} | ${p.totalScans} esc | 1ro: ${p.primerHora} ${p.primerZona || ''} ${p.primerProducto || ''} | Ult: ${p.ultimoHora} ${p.ultimoZona || ''} ${p.ultimoProducto || ''} | Efectiva: ${fmtSec(p.jornadaEfectivaSec)}`
+    ).join('\n');
+
+    const fullEvidencia = (pikeoInfo ? 'PIKEOS:\n' + pikeoInfo + '\n\n' : '') + 'TIEMPOS MUERTOS:\n' + evidencia;
 
     const body = {
       codUti, nomUti, turno,
@@ -203,7 +199,7 @@ export default function SancionesForm() {
       coordinador: (document.getElementById('coordNombre') as HTMLInputElement)?.value || '',
       sectorCoordinador: (document.getElementById('coordSector') as HTMLInputElement)?.value || '',
       rrhh: (document.getElementById('rrhhNombre') as HTMLInputElement)?.value || '',
-      evidencia,
+      evidencia: fullEvidencia,
       comentariosColaborador: (document.getElementById('comentColab') as HTMLTextAreaElement)?.value || '',
       comentariosCoordinador: (document.getElementById('comentCoord') as HTMLTextAreaElement)?.value || '',
       sugerencias: (document.getElementById('sugerencias') as HTMLTextAreaElement)?.value || '',
@@ -477,31 +473,120 @@ export default function SancionesForm() {
               </div>
             </div>
 
-            {/* Gaps detail - Screen view (grouped by date) */}
-            <div className="p-3 print:hidden">
-              {gaps.length > 0 ? (
-                gapsByDate.map(day => {
-                  const pick = picksByFecha.get(day.fecha);
-                  return (
+            {/* ─── SECTION A: Primer y Ultimo Pikeo ─── */}
+            {picksInfo.length > 0 && (
+            <div className="p-3 border-b border-slate-300">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-bold print:text-[12pt] text-blue-700">Primer y Ultimo Pikeo por Dia</span>
+              </div>
+
+              {/* Screen view */}
+              <div className="print:hidden overflow-x-auto">
+                <table className="w-full border-collapse text-[9px]">
+                  <thead>
+                    <tr className="bg-blue-50">
+                      <th className="border border-blue-200 px-2 py-1 text-left font-semibold text-blue-800">Fecha</th>
+                      <th className="border border-blue-200 px-2 py-1 text-center font-semibold text-blue-800">Escaneos</th>
+                      <th className="border border-blue-200 px-2 py-1 text-center font-semibold text-blue-800" colSpan={3}>Primer Pikeo</th>
+                      <th className="border border-blue-200 px-2 py-1 text-center font-semibold text-blue-800">Jornada</th>
+                      <th className="border border-blue-200 px-2 py-1 text-center font-semibold text-blue-800">Efectiva</th>
+                      <th className="border border-blue-200 px-2 py-1 text-center font-semibold text-green-800" colSpan={3}>Ultimo Pikeo</th>
+                    </tr>
+                    <tr className="bg-blue-50/50">
+                      <th className="border border-blue-100"></th>
+                      <th className="border border-blue-100"></th>
+                      <th className="border border-blue-100 text-[8px] text-blue-500">Hora</th>
+                      <th className="border border-blue-100 text-[8px] text-blue-500">Zona</th>
+                      <th className="border border-blue-100 text-[8px] text-blue-500">Producto</th>
+                      <th className="border border-blue-100"></th>
+                      <th className="border border-blue-100"></th>
+                      <th className="border border-blue-100 text-[8px] text-green-500">Hora</th>
+                      <th className="border border-green-100 text-[8px] text-green-500">Zona</th>
+                      <th className="border border-green-100 text-[8px] text-green-500">Producto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {picksSorted.map(p => (
+                      <tr key={p.fecha} className="hover:bg-slate-50">
+                        <td className="border border-slate-200 px-2 py-1 font-medium">{p.fecha}</td>
+                        <td className="border border-slate-200 px-2 py-1 text-center font-mono font-bold">{p.totalScans}</td>
+                        <td className="border border-slate-200 px-2 py-1 text-center font-mono text-blue-700 bg-blue-50/30">{p.primerHora}</td>
+                        <td className="border border-slate-200 px-2 py-1 text-center bg-blue-50/30">
+                          <span className="inline-block px-1 py-0.5 rounded bg-blue-200 text-blue-800 text-[8px] font-semibold">{p.primerZona || '—'}</span>
+                        </td>
+                        <td className="border border-slate-200 px-2 py-1 text-center font-mono text-[8px] text-blue-600 max-w-[100px] truncate">{p.primerProducto || '—'}</td>
+                        <td className="border border-slate-200 px-2 py-1 text-center text-muted-foreground">{fmtSec(p.jornadaSec)}</td>
+                        <td className="border border-slate-200 px-2 py-1 text-center font-medium">{fmtSec(p.jornadaEfectivaSec)}</td>
+                        <td className="border border-slate-200 px-2 py-1 text-center font-mono text-green-700 bg-green-50/30">{p.ultimoHora}</td>
+                        <td className="border border-slate-200 px-2 py-1 text-center bg-green-50/30">
+                          <span className="inline-block px-1 py-0.5 rounded bg-green-200 text-green-800 text-[8px] font-semibold">{p.ultimoZona || '—'}</span>
+                        </td>
+                        <td className="border border-slate-200 px-2 py-1 text-center font-mono text-[8px] text-green-600 max-w-[100px] truncate">{p.ultimoProducto || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Print view */}
+              <div className="hidden print:block">
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #999' }}>
+                      <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'left' }}>Fecha</th>
+                      <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Esc.</th>
+                      <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center', color: '#2563eb' }} colSpan={3}>Primer Pikeo</th>
+                      <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Efectiva</th>
+                      <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center', color: '#16a34a' }} colSpan={3}>Ultimo Pikeo</th>
+                    </tr>
+                    <tr>
+                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#666' }}></th>
+                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#666' }}></th>
+                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#60a5fa' }}>Hora</th>
+                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#60a5fa' }}>Zona</th>
+                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#60a5fa' }}>Producto</th>
+                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#666' }}></th>
+                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#4ade80' }}>Hora</th>
+                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#4ade80' }}>Zona</th>
+                      <th style={{ border: '1px solid #bbb', fontSize: '7px', color: '#4ade80' }}>Producto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {picksSorted.map(p => (
+                      <tr key={p.fecha} style={{ borderBottom: '1px solid #ddd' }}>
+                        <td style={{ border: '1px solid #ddd', padding: '1px 3px' }}>{p.fecha}</td>
+                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center', fontWeight: 'bold' }}>{p.totalScans}</td>
+                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center', color: '#2563eb' }}>{p.primerHora}</td>
+                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{p.primerZona || '-'}</td>
+                        <td style={{ border: '1px solid #ddd', padding: '1px 3px' }}>{p.primerProducto || '-'}</td>
+                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{fmtSec(p.jornadaEfectivaSec)}</td>
+                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center', color: '#16a34a' }}>{p.ultimoHora}</td>
+                        <td style={{ border: '1px solid #ddd', padding: '1px 3px', textAlign: 'center' }}>{p.ultimoZona || '-'}</td>
+                        <td style={{ border: '1px solid #ddd', padding: '1px 3px' }}>{p.ultimoProducto || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            )}
+
+            {/* ─── SECTION B: Tiempos Muertos (Gaps) ─── */}
+            {gaps.length > 0 && (
+            <div className="p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-bold print:text-[12pt] text-red-700">Tiempos Muertos</span>
+              </div>
+
+              {/* Screen view */}
+              <div className="print:hidden">
+                {gapsByDate.map(day => (
                   <div key={day.fecha} className="mb-3 last:mb-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">{day.fecha}</span>
+                      <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded">{day.fecha}</span>
                       <span className="text-[9px] text-muted-foreground">{day.count} evento(s)</span>
                       <span className="text-[9px] font-bold text-red-600">{minToHM(day.totalMin)}</span>
                     </div>
-                    {pick && (
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-1.5 px-1 text-[9px] bg-slate-50 rounded-sm p-1.5 border border-slate-200">
-                        <span className="font-semibold text-slate-600">{pick.totalScans} escaneos</span>
-                        <span className="text-blue-600 font-medium">
-                          <span className="text-blue-400">1ro:</span> {pick.primerHora} {pick.primerZona ? `(${pick.primerZona})` : ''} {pick.primerProducto ? `[${pick.primerProducto}]` : ''}
-                        </span>
-                        <span className="text-green-600 font-medium">
-                          <span className="text-green-400">Ult:</span> {pick.ultimoHora} {pick.ultimoZona ? `(${pick.ultimoZona})` : ''} {pick.ultimoProducto ? `[${pick.ultimoProducto}]` : ''}
-                        </span>
-                        <span className="text-muted-foreground">Jornada: {fmtSec(pick.jornadaSec)}</span>
-                        <span className="text-muted-foreground">Efectiva: {fmtSec(pick.jornadaEfectivaSec)}</span>
-                      </div>
-                    )}
                     <textarea
                       className="w-full border border-slate-300 rounded-sm p-2 text-[10px] font-mono leading-relaxed bg-white"
                       rows={Math.min(day.items.length + 2, 12)}
@@ -515,71 +600,58 @@ export default function SancionesForm() {
                       }
                     />
                   </div>
-                  );
-                })
-              ) : (
-                <p className="text-[10px] text-slate-400 italic">Sin eventos de tiempo muerto registrados para este operador.</p>
-              )}
-            </div>
+                ))}
+              </div>
 
-            {/* Gaps detail - Print view (grouped by date) */}
-            <div className="hidden print:block p-3">
-              {gapsByDate.map(day => {
-                const pick = picksByFecha.get(day.fecha);
-                return (
-                <div key={day.fecha} style={{ marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px', borderBottom: '1px solid #666', paddingBottom: '2px' }}>
-                    <span style={{ fontSize: '9px', fontWeight: 'bold', background: '#f1f5f9', padding: '1px 6px', borderRadius: '2px' }}>{day.fecha}</span>
-                    <span style={{ fontSize: '8px', color: '#666' }}>{day.count} evento(s)</span>
-                    <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#dc2626' }}>{minToHM(day.totalMin)}</span>
-                    {pick && (
-                      <>
-                        <span style={{ fontSize: '8px', color: '#475569', marginLeft: '4px' }}>{pick.totalScans} esc.</span>
-                        <span style={{ fontSize: '8px', color: '#2563eb' }}>1ro: {pick.primerHora} {pick.primerZona || ''}</span>
-                        <span style={{ fontSize: '8px', color: '#16a34a' }}>Ult: {pick.ultimoHora} {pick.ultimoZona || ''}</span>
-                        <span style={{ fontSize: '7px', color: '#94a3b8' }}>Efectiva: {fmtSec(pick.jornadaEfectivaSec)}</span>
-                      </>
-                    )}
-                  </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid #999' }}>
-                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center', width: '18px' }}>#</th>
-                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Inicio</th>
-                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Fin</th>
-                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Duracion</th>
-                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Bul.Ant</th>
-                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Bul.Pos</th>
-                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Zona O.</th>
-                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Zona D.</th>
-                        <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'left' }}>Producto</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {day.items.map((g, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid #ddd' }}>
-                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{i + 1}</td>
-                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.prevHora}</td>
-                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.currHora}</td>
-                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center', fontWeight: 'bold' }}>{fmtSec(g.gapSeconds)}</td>
-                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.prevBultos}</td>
-                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.currBultos}</td>
-                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.prevZonSts || '-'}</td>
-                          <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.currZonSts || '-'}</td>
-                          <td style={{ border: '1px solid #ddd', padding: '1px 2px' }}>{g.prevCodPro}</td>
+              {/* Print view */}
+              <div className="hidden print:block">
+                {gapsByDate.map(day => (
+                  <div key={day.fecha} style={{ marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px', borderBottom: '1px solid #999', paddingBottom: '2px' }}>
+                      <span style={{ fontSize: '9px', fontWeight: 'bold', background: '#fef2f2', color: '#b91c1c', padding: '1px 6px', borderRadius: '2px' }}>{day.fecha}</span>
+                      <span style={{ fontSize: '8px', color: '#666' }}>{day.count} evento(s)</span>
+                      <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#dc2626' }}>{minToHM(day.totalMin)}</span>
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #999' }}>
+                          <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center', width: '18px' }}>#</th>
+                          <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Inicio</th>
+                          <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Fin</th>
+                          <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Duracion</th>
+                          <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Bul.Ant</th>
+                          <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Bul.Pos</th>
+                          <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Zona O.</th>
+                          <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'center' }}>Zona D.</th>
+                          <th style={{ border: '1px solid #999', padding: '1px 3px', textAlign: 'left' }}>Producto</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                );
-              })}
-              {tmInf && tmInf.totalMinutos > 0 && (
-                <p style={{ fontSize: '8px', marginTop: '4px', color: '#7c3aed' }}>
-                  Tiempos Muertos Informados: {tmInf.totalMinutos} min en {tmInf.registros} evento(s)
-                </p>
-              )}
+                      </thead>
+                      <tbody>
+                        {day.items.map((g, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #ddd' }}>
+                            <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{i + 1}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.prevHora}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.currHora}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center', fontWeight: 'bold' }}>{fmtSec(g.gapSeconds)}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.prevBultos}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.currBultos}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.prevZonSts || '-'}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '1px 2px', textAlign: 'center' }}>{g.currZonSts || '-'}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '1px 2px' }}>{g.prevCodPro}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+                {tmInf && tmInf.totalMinutos > 0 && (
+                  <p style={{ fontSize: '8px', marginTop: '4px', color: '#7c3aed' }}>
+                    Tiempos Muertos Informados: {tmInf.totalMinutos} min en {tmInf.registros} evento(s)
+                  </p>
+                )}
+              </div>
             </div>
+            )}
           </div>
         </div>
 
