@@ -18,6 +18,15 @@
           "value": "no-cache, no-store, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/sanciones-inicio",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
     }
   ],
   "functions": {
@@ -26,6 +35,15 @@
     },
     "src/app/api/export-operator/route.ts": {
       "maxDuration": 30
+    },
+    "src/app/api/tm-informados/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/stats/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/sanciones/route.ts": {
+      "maxDuration": 15
     }
   }
 }
