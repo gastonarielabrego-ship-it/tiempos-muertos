@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getDescansoSec, getTipoOperador } from '@/lib/operator-utils';
 
 type Turno = 'TM' | 'TT' | 'TN';
 
@@ -22,6 +23,7 @@ interface PickRow {
   nomUti: string;
   fecha: string;
   turno: Turno;
+  tipo: 'efectivo' | 'eventual';
   totalScans: number;
   primerHora: string;
   primerZona: string | null;
@@ -69,11 +71,13 @@ export async function GET(request: NextRequest) {
 
       if (turnoFilter && turno !== turnoFilter) continue;
 
+      const descansoSec = getDescansoSec(first.codUti, turno);
       rows.push({
         codUti: first.codUti,
         nomUti: first.nomUti,
         fecha: first.fecha instanceof Date ? first.fecha.toISOString().split('T')[0] : String(first.fecha).split('T')[0],
         turno,
+        tipo: getTipoOperador(first.codUti),
         totalScans: dayScans.length,
         primerHora: first.hora,
         primerZona: first.zonSts,
@@ -82,8 +86,8 @@ export async function GET(request: NextRequest) {
         ultimoZona: last.zonSts,
         ultimoProducto: last.codPro,
         jornadaSec: horaToSec(last.hora) - horaToSec(first.hora),
-        descansoSec: 2100,
-        jornadaEfectivaSec: Math.max(0, horaToSec(last.hora) - horaToSec(first.hora) - 2100),
+        descansoSec,
+        jornadaEfectivaSec: Math.max(0, horaToSec(last.hora) - horaToSec(first.hora) - descansoSec),
       });
     }
 

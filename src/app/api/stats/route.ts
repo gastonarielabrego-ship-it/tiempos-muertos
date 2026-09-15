@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, isTurso, tursoQuery } from '@/lib/db';
+import { getDescansoSec, getDescansoMin, getTipoOperador } from '@/lib/operator-utils';
 
 const DEAD_TIME_THRESHOLD = 300;
 
@@ -83,8 +84,7 @@ export async function GET(request: NextRequest) {
       const jornadaSec = (lP[0] * 3600 + lP[1] * 60 + lP[2]) - (fP[0] * 3600 + fP[1] * 60 + fP[2]);
       // Determine turno for descanso logic
       const turno = getTurno(first.hora);
-      const tieneDescanso = turno !== 'TN';
-      const descansoSec = tieneDescanso ? 2100 : 0; // 35 min
+      const descansoSec = getDescansoSec(first.codUti, turno);
       const jornadaEfectiva = Math.max(0, jornadaSec - descansoSec);
       totalPreparacionSec += jornadaEfectiva;
       uniqueOperators.set(first.codUti, first.nomUti);
@@ -164,9 +164,9 @@ export async function GET(request: NextRequest) {
         // TM informados
         const tmInfMin = Math.round((tmInfMap[cod] || 0) * 10) / 10;
         const tmInfEventos = tmInfEvMap[cod] || 0;
-        // Descanso: only for TM and TT (NOT TN)
-        const tieneDescanso = predTurno !== 'TN';
-        const descansoBruto = tieneDescanso ? d.dias.size * 35 : 0;
+        // Descanso: dynamic based on operator type (efectivo/eventual) and turno
+        const descansoPerDia = getDescansoMin(cod, predTurno);
+        const descansoBruto = d.dias.size * descansoPerDia;
         const descansoReal = Math.min(descansoBruto, brutoMin);
         // Neto = Bruto - Descanso - TM Informados
         const netoMin = Math.max(0, Math.round((brutoMin - descansoReal - tmInfMin) * 10) / 10);
@@ -185,6 +185,8 @@ export async function GET(request: NextRequest) {
           events: d.events,
           maxGap: d.maxSec,
           turno: predTurno,
+          tipo: getTipoOperador(cod),
+          descansoPerDia,
           totalBultos: bultosMap.get(cod) || 0,
         };
       })

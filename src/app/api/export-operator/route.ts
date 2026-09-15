@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import * as XLSX from 'xlsx';
+import { getDescansoMin, getDescansoSec, getTipoOperador } from '@/lib/operator-utils';
 
 const DEAD_TIME_THRESHOLD = 300;
 
@@ -110,8 +111,15 @@ export async function GET(request: NextRequest) {
     gaps.forEach((g, i) => { g.rank = i + 1; });
 
     const opName = allScans.length > 0 ? allScans[0].nomUti : operator;
+    const opTipo = getTipoOperador(operator);
+    // Determine predominant turno for descanso calculation
+    const turnoCounts: Record<Turno, number> = { TM: 0, TT: 0, TN: 0 };
+    gaps.forEach(g => turnoCounts[g.turno] += g.gapSeconds);
+    const predTurno: Turno = (Object.entries(turnoCounts).sort(([, a], [, b]) => b - a)[0]?.[0] || 'TM') as Turno;
+    const descansoPerDiaMin = getDescansoMin(operator, predTurno);
+    const descansoPerDiaSec = descansoPerDiaMin * 60;
     const brutoSec = totalDeadTimeSec;
-    const descansoSec = diasSet.size * 2100;
+    const descansoSec = diasSet.size * descansoPerDiaSec;
     const descansoReal = Math.min(descansoSec, brutoSec);
     const netoSec = brutoSec - descansoReal;
     const maxGap = gaps.length > 0 ? gaps[0].gapSeconds : 0;
@@ -137,7 +145,7 @@ export async function GET(request: NextRequest) {
       ['Dias Trabajados', diasSet.size],
       ['Eventos (>5 min)', gaps.length],
       ['Tiempo Bruto', fmtHMS(brutoSec), `${Math.round(brutoSec / 60)} min`],
-      ['Descanso', `-${fmtHMS(descansoReal)}`, `-${Math.round(descansoReal / 60)} min`, `${diasSet.size} dias x 35 min`],
+      ['Descanso', `-${fmtHMS(descansoReal)}`, `-${Math.round(descansoReal / 60)} min`, `${diasSet.size} dias x ${descansoPerDiaMin} min`, `(${opTipo})`],
       ['Tiempo Neto', fmtHMS(netoSec), `${Math.round(netoSec / 60)} min`],
       ['Mayor Gap', fmtHMS(maxGap)],
     ];

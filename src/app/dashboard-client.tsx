@@ -51,6 +51,7 @@ interface OpStat {
   tmInfEventos: number;
   descansoMin: number;
   descansoMinSec: number;
+  descansoPerDia: number;
   totalNetoMin: number;
   totalNetoMinSec: number;
   totalBultos: number;
@@ -58,6 +59,7 @@ interface OpStat {
   events: number;
   maxGap: number;
   turno: string;
+  tipo: string; // 'efectivo' | 'eventual'
 }
 
 interface GapRow {
@@ -84,6 +86,7 @@ interface PickRow {
   nomUti: string;
   fecha: string;
   turno: string;
+  tipo: string; // 'efectivo' | 'eventual'
   totalScans: number;
   primerHora: string;
   primerZona: string | null;
@@ -753,6 +756,7 @@ export default function DashboardPage() {
                     <User className="h-4 w-4 text-red-500" />
                     <h3 className="text-sm font-semibold text-red-700">{selectedOpName}</h3>
                     <TurnoBadge turno={selectedOpStats.turno} />
+                    <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${selectedOpStats.tipo === 'eventual' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>{selectedOpStats.tipo || 'efectivo'}</span>
                     <Button
                       variant="outline"
                       size="sm"
@@ -806,7 +810,7 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-3 gap-2 items-center py-1 border-b border-slate-200">
                       <span className="text-[10px] text-muted-foreground">Descanso</span>
                       <span className="text-xs text-right font-medium text-slate-500">{selectedOpStats.descansoMin > 0 ? `-${fmtDur(selectedOpStats.descansoMinSec)}` : '—'}</span>
-                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.descansoMin > 0 ? `-${selectedOpStats.descansoMin} min (${selectedOpStats.diasTrabajados}d x 35m)` : selectedOpStats.turno === 'TN' ? 'no aplica (TN)' : '—'}</span>
+                      <span className="text-[10px] text-right text-muted-foreground">{selectedOpStats.descansoMin > 0 ? `-${selectedOpStats.descansoMin} min (${selectedOpStats.diasTrabajados}d x ${selectedOpStats.descansoPerDia || 35}m)` : selectedOpStats.turno === 'TN' ? 'no aplica (TN)' : '—'}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-2 items-center py-1.5 bg-green-50/60 rounded px-1">
                       <span className="text-[10px] font-semibold text-green-700">Tiempo Neto</span>
@@ -950,7 +954,7 @@ export default function DashboardPage() {
                               </TableCell>
                               <TableCell>
                                 <div className="text-xs font-medium">{op.nomUti}</div>
-                                <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+                                <div className="text-[10px] text-muted-foreground flex items-center gap-1">{op.codUti} <span className={`text-[8px] font-semibold px-1 py-0.5 rounded ${op.tipo === 'eventual' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>{op.tipo || 'efectivo'}</span></div>
                               </TableCell>
                               <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
                               <TableCell className="text-xs text-right font-bold">
@@ -1174,7 +1178,7 @@ export default function DashboardPage() {
                                   </TableCell>
                                   <TableCell>
                                     <div className="text-xs font-medium">{op.nomUti}</div>
-                                    <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1">{op.codUti} <span className={`text-[8px] font-semibold px-1 py-0.5 rounded ${op.tipo === 'eventual' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>{op.tipo || 'efectivo'}</span></div>
                                   </TableCell>
                                   <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
                                   <TableCell className="text-xs text-right font-bold text-blue-600">{fmtDur(op.totalMinSec)}</TableCell>
@@ -1439,7 +1443,7 @@ export default function DashboardPage() {
                                   </TableCell>
                                   <TableCell>
                                     <div className="text-xs font-medium">{op.nomUti}</div>
-                                    <div className="text-[10px] text-muted-foreground">{op.codUti}</div>
+                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1">{op.codUti} <span className={`text-[8px] font-semibold px-1 py-0.5 rounded ${op.tipo === 'eventual' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>{op.tipo || 'efectivo'}</span></div>
                                   </TableCell>
                                   <TableCell className="text-center"><TurnoBadge turno={op.turno} /></TableCell>
                                   <TableCell className="text-xs text-right font-bold text-purple-600">{fmtDur(op.totalMinSec)}</TableCell>
@@ -1688,7 +1692,7 @@ export default function DashboardPage() {
                               <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Zona</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-blue-50">Producto</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground">Bruta</TableHead>
-                              <TableHead className="text-[10px] text-muted-foreground">35m</TableHead>
+                              <TableHead className="text-[10px] text-muted-foreground">Desc.</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground">Neta</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-green-50">Hora</TableHead>
                               <TableHead className="text-[10px] text-muted-foreground bg-green-50">Zona</TableHead>
@@ -1720,7 +1724,7 @@ export default function DashboardPage() {
                                 </TableCell>
                                 {/* Descanso */}
                                 <TableCell className="text-center">
-                                  <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">-35m</span>
+                                  <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">-{Math.round(row.descansoSec / 60)}m</span>
                                 </TableCell>
                                 {/* Jornada Efectiva */}
                                 <TableCell className="text-center">
