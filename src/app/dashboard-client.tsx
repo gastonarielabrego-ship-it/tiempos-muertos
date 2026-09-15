@@ -172,6 +172,7 @@ export default function DashboardPage() {
   const [selectedOp, setSelectedOp] = useState<string>('all');
   const [selectedTurno, setSelectedTurno] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<string>('all');
+  const [selectedTipo, setSelectedTipo] = useState<string>('all');
   const [hasData, setHasData] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('ranking');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -471,6 +472,7 @@ export default function DashboardPage() {
       setSelectedOp('all');
       setSelectedTurno('all');
       setSelectedDate('all');
+      setSelectedTipo('all');
       setActiveTab('ranking');
       await fetchFilters();
     } catch (err) {
@@ -507,6 +509,11 @@ export default function DashboardPage() {
   const selectedOpStats = selectedOp !== 'all'
     ? stats?.byOperator.find(o => o.codUti === selectedOp)
     : null;
+
+  // Filtered byOperator based on tipo selection
+  const filteredByOperator = stats?.byOperator.filter(op =>
+    selectedTipo === 'all' || op.tipo === selectedTipo
+  ) ?? [];
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -650,8 +657,20 @@ export default function DashboardPage() {
                 </SelectContent>
               </Select>
 
-              {(selectedOp !== 'all' || selectedTurno !== 'all' || selectedDate !== 'all') && (
-                <Button variant="ghost" size="sm" onClick={() => { setSelectedOp('all'); setSelectedTurno('all'); setSelectedDate('all'); setActiveTab('ranking'); }} className="h-8 text-xs">
+              <span className="text-xs font-medium text-muted-foreground ml-2">Tipo:</span>
+              <Select value={selectedTipo} onValueChange={setSelectedTipo}>
+                <SelectTrigger className="w-full sm:w-[130px] h-8 text-xs">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="eventual">Eventual</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {(selectedOp !== 'all' || selectedTurno !== 'all' || selectedDate !== 'all' || selectedTipo !== 'all') && (
+                <Button variant="ghost" size="sm" onClick={() => { setSelectedOp('all'); setSelectedTurno('all'); setSelectedDate('all'); setSelectedTipo('all'); setActiveTab('ranking'); }} className="h-8 text-xs">
                   <X className="h-3 w-3 mr-1" />Limpiar
                 </Button>
               )}
@@ -898,7 +917,7 @@ export default function DashboardPage() {
             )}
 
             {/* ===================== RANKING TAB ===================== */}
-            {activeTab === 'ranking' && stats && stats.byOperator.length > 0 && (
+            {activeTab === 'ranking' && stats && filteredByOperator.length > 0 && (
               <Card>
                 <CardContent className="p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -918,7 +937,7 @@ export default function DashboardPage() {
                         <Download className="h-3 w-3" />
                         <span className="hidden sm:inline">Descargar Excel</span>
                       </Button>
-                      <span className="text-xs text-muted-foreground">{stats.byOperator.length} operadores</span>
+                      <span className="text-xs text-muted-foreground">{filteredByOperator.length} operadores</span>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
@@ -940,7 +959,7 @@ export default function DashboardPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {stats.byOperator.map((op, i) => {
+                        {filteredByOperator.map((op, i) => {
                           const isTop3 = i < 3;
                           return (
                             <TableRow key={op.codUti}
