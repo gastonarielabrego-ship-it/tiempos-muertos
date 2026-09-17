@@ -305,6 +305,7 @@ export default function DashboardPage() {
     setSancionesLoading(true);
     try {
       const res = await fetch('/api/sanciones');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setSanciones(data.sanciones || []);
       setSancionesCounts(data.countsByOp || {});
@@ -461,7 +462,9 @@ export default function DashboardPage() {
         });
         if (!res.ok) {
           const text = await res.text().catch(() => '');
-          throw new Error(text || `Error HTTP ${res.status}`);
+          let errMsg = `Error HTTP ${res.status}`;
+          try { const j = JSON.parse(text); if (j.error) errMsg = j.error; } catch { if (text) errMsg = text.slice(0, 200); }
+          throw new Error(errMsg);
         }
         const data = await res.json();
         totalInserted += data.inserted || 0;
@@ -491,8 +494,13 @@ export default function DashboardPage() {
       const fd = new FormData();
       fd.append('file', file);
       const res = await fetch('/api/tm-informados', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        let errMsg = `Error HTTP ${res.status}`;
+        try { const j = JSON.parse(text); if (j.error) errMsg = j.error; } catch { if (text) errMsg = text.slice(0, 200); }
+        throw new Error(errMsg);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
       toast({ title: 'TM Informados cargados', description: `${data.totalRecords} registros de tiempos muertos informados` });
       await fetchStats();
     } catch (err) {
