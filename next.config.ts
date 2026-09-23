@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  serverExternalPackages: ['@libsql/client', 'xlsx'],
+  serverExternalPackages: ['@neondatabase/serverless', 'xlsx'],
 };
 
 export default nextConfig;

@@ -15,7 +15,19 @@ export async function GET() {
     const recordCount = await db.scanRecord.count();
     return NextResponse.json({ ...info, status: 'connected', recordCount });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ ...info, status: 'error', error: msg.substring(0, 300) }, { status: 500 });
+    // Handle ErrorEvent objects from Neon serverless driver
+    let msg = 'Unknown error';
+    if (e instanceof Error) {
+      msg = e.message;
+    } else if (e && typeof e === 'object' && 'message' in e) {
+      msg = String((e as any).message);
+    } else if (e && typeof e === 'object' && 'type' in e) {
+      // ErrorEvent from Neon WebSocket
+      msg = `ErrorEvent type: ${(e as any).type}, error: ${JSON.stringify((e as any).error || 'none')}`;
+    } else {
+      msg = String(e);
+    }
+    console.error('[health] DB error:', msg, e);
+    return NextResponse.json({ ...info, status: 'error', error: msg.substring(0, 500) }, { status: 500 });
   }
 }
