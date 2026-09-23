@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isTurso, tursoQuery } from '@/lib/db';
+import { db } from '@/lib/db';
 import * as XLSX from 'xlsx';
 
 // POST: Upload Excel with tiempos muertos informados
 export async function POST(request: NextRequest) {
   try {
-    if (!isTurso) {
-      return NextResponse.json({ error: 'Solo disponible en producción (Turso)' }, { status: 400 });
-    }
-
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     if (!file) {
@@ -25,11 +21,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Clear existing data before loading new
-    await tursoQuery('DELETE FROM "TiemposMuertosInf"');
+    await db.tiemposMuertosInf.deleteMany();
 
-    let inserted = 0;
-    const BATCH_SIZE = 500;
-    const values: string[] = [];
+    const data: {
+      fecha: number;
+      turno: string;
+      operario: string;
+      nombre: string | null;
+      estado: string | null;
+      motivo: number | null;
+      descripcionMotivo: string | null;
+      minutos: number;
+      fechaDesde: number | null;
+    }[] = [];
 
     for (const row of rows) {
       const fecha = row['FECHA'];
@@ -44,26 +48,29 @@ export async function POST(request: NextRequest) {
 
       if (!operario) continue;
 
-      const fechaNum = Number(fecha) || 0;
-      const fechaDesdeNum = Number(fechaDesde) || 0;
-      const minutosNum = Number(minutos) || 0;
-      const motivoNum = Number(motivo) || null;
-
-      values.push(`(${fechaNum},${turno ? `'${String(turno)}'` : "'TM'"},'${String(operario)}',${nombre ? `'${String(nombre).replace(/'/g, "''")}'` : 'NULL'},${estado ? `'${String(estado)}'` : 'NULL'},${motivoNum},${descripcionMotivo ? `'${String(descripcionMotivo).replace(/'/g, "''")}'` : 'NULL'},${minutosNum},${fechaDesdeNum})`);
-      inserted++;
+      data.push({
+        fecha: Number(fecha) || 0,
+        turno: turno ? String(turno) : 'TM',
+        operario: String(operario),
+        nombre: nombre ? String(nombre) : null,
+        estado: estado ? String(estado) : null,
+        motivo: Number(motivo) || null,
+        descripcionMotivo: descripcionMotivo ? String(descripcionMotivo) : null,
+        minutos: Number(minutos) || 0,
+        fechaDesde: Number(fechaDesde) || null,
+      });
     }
 
-    // Insert in batches
-    for (let i = 0; i < values.length; i += BATCH_SIZE) {
-      const batch = values.slice(i, i + BATCH_SIZE).join(',');
-      await tursoQuery(
-        `INSERT INTO "TiemposMuertosInf" ("fecha","turno","operario","nombre","estado","motivo","descripcionMotivo","minutos","fechaDesde") VALUES ${batch}`
-      );
+    // Insert in batches of 500
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < data.length; i += BATCH_SIZE) {
+      const batch = data.slice(i, i + BATCH_SIZE);
+      await db.tiemposMuertosInf.createMany({ data: batch });
     }
 
     return NextResponse.json({
       success: true,
-      totalRecords: inserted,
+      totalRecords: data.length,
     });
   } catch (error) {
     console.error('Error cargando TM informados:', error);
@@ -74,21 +81,17 @@ export async function POST(request: NextRequest) {
 // GET: Return total minutes per operator
 export async function GET() {
   try {
-    if (!isTurso) {
-      return NextResponse.json({ byOperator: {} });
-    }
-
-    const result = await tursoQuery(`
-      SELECT "operario", SUM("minutos") as totalMinutos, COUNT(*) as registros
-      FROM "TiemposMuertosInf"
-      GROUP BY "operario"
-    `);
+    const result = await db.tiemposMuertosInf.groupBy({
+      by: ['operario'],
+      _sum: { minutos: true },
+      _count: { _all: true },
+    });
 
     const byOperator: Record<string, { totalMinutos: number; registros: number }> = {};
-    for (const row of result.rows) {
-      byOperator[String(row.operario)] = {
-        totalMinutos: Number(row.totalMinutos),
-        registros: Number(row.registros),
+    for (const row of result) {
+      byOperator[row.operario] = {
+        totalMinutos: row._sum.minutos || 0,
+        registros: row._count._all,
       };
     }
 

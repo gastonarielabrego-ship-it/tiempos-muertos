@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dummy.db"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model ScanRecord {
@@ -27,4 +28,54 @@ model ScanRecord {
   @@index([fecha])
   @@index([zonSts])
   @@index([codAct])
+}
+
+model TiemposMuertosInf {
+  id                Int      @id @default(autoincrement())
+  fecha             Int
+  turno             String
+  operario          String
+  nombre            String?
+  estado            String?
+  motivo            Int?
+  descripcionMotivo String?
+  minutos           Int      @default(0)
+  fechaDesde        Int?
+  createdAt         DateTime @default(now())
+
+  @@index([operario])
+}
+
+model Sancion {
+  id                     Int      @id @default(autoincrement())
+  codUti                 String
+  nomUti                 String
+  turno                  String?
+  tipo                   String?
+  tiempoNeto             Float?
+  bultos                 Int?
+  fechaMedicion          String?
+  coordinador            String?
+  sectorCoordinador      String?
+  rrhh                   String?
+  evidencia              String?
+  comentariosColaborador String?
+  comentariosCoordinador String?
+  sugerencias           String?
+  createdAt              DateTime @default(now())
+}
+
+model Indicador {
+  id                  Int      @id @default(autoincrement())
+  fecha               String
+  turno               String   @default("todos")
+  brutoMin            Float    @default(0)
+  descansoMin         Float    @default(0)
+  tmInfMin            Float    @default(0)
+  tmInfEventos        Int      @default(0)
+  netoMin             Float    @default(0)
+  totalBultos         Int      @default(0)
+  totalPreparacionMin Float    @default(0)
+  totalColaboradores  Int      @default(0)
+  createdAt           DateTime @default(now())
 }

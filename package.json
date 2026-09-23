@@ -11,8 +11,8 @@
     "db:generate": "prisma generate"
   },
   "dependencies": {
-    "@libsql/client": "^0.14.0",
-    "@prisma/adapter-libsql": "^6.11.1",
+    "@neondatabase/serverless": "^1.1.0",
+    "@prisma/adapter-neon": "^7.10.0",
     "@prisma/client": "^6.11.1",
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-slot": "^1.2.3",

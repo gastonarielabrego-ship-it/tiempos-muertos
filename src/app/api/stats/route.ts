@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, isTurso, tursoQuery } from '@/lib/db';
+import { db } from '@/lib/db';
 import { getDescansoSec, getDescansoMin, getTipoOperador } from '@/lib/operator-utils';
 
 const DEAD_TIME_THRESHOLD = 300;
@@ -138,20 +138,18 @@ export async function GET(request: NextRequest) {
     // Fetch TM informados (informed dead times): total minutes and event count per operator
     let tmInfMap: Record<string, number> = {};
     let tmInfEvMap: Record<string, number> = {};
-    if (isTurso) {
-      try {
-        const tmResult = await tursoQuery(`
-          SELECT "operario", SUM("minutos") as totalMinutos, COUNT(*) as totalEventos
-          FROM "TiemposMuertosInf"
-          GROUP BY "operario"
-        `);
-        for (const row of tmResult.rows) {
-          tmInfMap[String(row.operario)] = Number(row.totalMinutos);
-          tmInfEvMap[String(row.operario)] = Number(row.totalEventos);
-        }
-      } catch (e) {
-        console.error('[stats] Error fetching TM informados:', e);
+    try {
+      const tmInfRows = await db.tiemposMuertosInf.groupBy({
+        by: ['operario'],
+        _sum: { minutos: true },
+        _count: { _all: true },
+      });
+      for (const row of tmInfRows) {
+        tmInfMap[row.operario] = row._sum.minutos || 0;
+        tmInfEvMap[row.operario] = row._count._all;
       }
+    } catch (e) {
+      console.error('[stats] Error fetching TM informados:', e);
     }
 
     const byOperator = Array.from(opMap.entries())

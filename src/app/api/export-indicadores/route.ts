@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
-import { isTurso, tursoQuery } from '@/lib/db';
+import { db } from '@/lib/db';
 import * as XLSX from 'xlsx';
 
 export async function GET() {
   try {
-    if (!isTurso) {
-      return NextResponse.json({ error: 'Solo disponible en producción' }, { status: 400 });
-    }
-
-    const result = await tursoQuery(`SELECT * FROM "Indicador" ORDER BY "createdAt" DESC`);
+    const indicadores = await db.indicador.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
 
     const wb = XLSX.utils.book_new();
 
@@ -27,24 +25,24 @@ export async function GET() {
       'Cap. Equiv.', 'Bultos/h',
     ];
 
-    const rows = result.rows.map(r => {
-      const bruto = Number(r.brutoMin) || 0;
-      const neto = Number(r.netoMin) || 0;
-      const prep = Number(r.totalPreparacionMin) || 0;
-      const bultos = Number(r.totalBultos) || 0;
+    const rows = indicadores.map(r => {
+      const bruto = r.brutoMin || 0;
+      const neto = r.netoMin || 0;
+      const prep = r.totalPreparacionMin || 0;
+      const bultos = r.totalBultos || 0;
       const prepH = minToDecH(prep);
       const capEquiv = prepH > 0 ? (minToDecH(bruto) / 8.35).toFixed(2) : '0.00';
       const bultosHora = prepH > 0 ? (bultos / prepH).toFixed(2) : '0.00';
 
       return [
-        String(r.fecha),
-        String(r.turno),
+        r.fecha,
+        r.turno,
         minToH(prep),
-        Number(r.totalColaboradores) || 0,
+        r.totalColaboradores || 0,
         bultos,
         minToH(bruto),
-        minToH(Number(r.descansoMin) || 0),
-        minToH(Number(r.tmInfMin) || 0),
+        minToH(r.descansoMin || 0),
+        minToH(r.tmInfMin || 0),
         minToH(neto),
         capEquiv,
         bultosHora,

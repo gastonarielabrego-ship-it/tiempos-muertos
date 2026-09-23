@@ -1,28 +1,24 @@
 import { NextResponse } from 'next/server';
-import { isTurso, tursoQuery } from '@/lib/db';
+import { db } from '@/lib/db';
 import * as XLSX from 'xlsx';
 
 export async function GET() {
   try {
-    if (!isTurso) {
-      return NextResponse.json({ error: 'Solo disponible en producción' }, { status: 400 });
-    }
-
     // Fetch all sanciones
-    const sancionesResult = await tursoQuery(`
-      SELECT * FROM "Sancion" ORDER BY "createdAt" DESC
-    `);
+    const sanciones = await db.sancion.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
 
     // Fetch TM informados per operator
     const tmInfMap: Record<string, { min: number; ev: number }> = {};
     try {
-      const tmResult = await tursoQuery(`
-        SELECT "operario", SUM("minutos") as totalMinutos, COUNT(*) as totalEventos
-        FROM "TiemposMuertosInf"
-        GROUP BY "operario"
-      `);
-      for (const row of tmResult.rows) {
-        tmInfMap[String(row.operario)] = { min: Number(row.totalMinutos), ev: Number(row.totalEventos) };
+      const tmInfRows = await db.tiemposMuertosInf.groupBy({
+        by: ['operario'],
+        _sum: { minutos: true },
+        _count: { _all: true },
+      });
+      for (const row of tmInfRows) {
+        tmInfMap[row.operario] = { min: row._sum.minutos || 0, ev: row._count._all };
       }
     } catch (e) {
       console.error('[export-sanciones] Error fetching TM informados:', e);
@@ -37,26 +33,26 @@ export async function GET() {
       'RRHH', 'TM Inf. (min)', 'Ev. TM Inf.',
       'Coment. Colaborador', 'Coment. Coordinador',
     ];
-    const h1Rows = sancionesResult.rows.map((r, i) => {
-      const cod = String(r.codUti);
+    const h1Rows = sanciones.map((r, i) => {
+      const cod = r.codUti;
       const tmInf = tmInfMap[cod] || { min: 0, ev: 0 };
-      const created = r.createdAt ? String(r.createdAt).replace('T', ' ').substring(0, 19) : '';
+      const created = r.createdAt ? r.createdAt.toISOString().replace('T', ' ').substring(0, 19) : '';
       return [
         i + 1,
         created,
         cod,
-        String(r.nomUti),
-        r.turno ? String(r.turno) : '',
-        r.bultos ? Number(r.bultos) : 0,
-        r.tiempoNeto ? Number(r.tiempoNeto) : 0,
-        r.fechaMedicion ? String(r.fechaMedicion) : '',
-        r.coordinador ? String(r.coordinador) : '',
-        r.sectorCoordinador ? String(r.sectorCoordinador) : '',
-        r.rrhh ? String(r.rrhh) : '',
+        r.nomUti,
+        r.turno || '',
+        r.bultos || 0,
+        r.tiempoNeto || 0,
+        r.fechaMedicion || '',
+        r.coordinador || '',
+        r.sectorCoordinador || '',
+        r.rrhh || '',
         tmInf.min,
         tmInf.ev,
-        r.comentariosColaborador ? String(r.comentariosColaborador) : '',
-        r.comentariosCoordinador ? String(r.comentariosCoordinador) : '',
+        r.comentariosColaborador || '',
+        r.comentariosCoordinador || '',
       ];
     });
 
@@ -78,14 +74,14 @@ export async function GET() {
 
     // --- Sheet 2: Resumen por Operador ---
     const opSummary: Record<string, { nombre: string; count: number; lastDate: string; netoTotal: number }> = {};
-    for (const r of sancionesResult.rows) {
-      const cod = String(r.codUti);
+    for (const r of sanciones) {
+      const cod = r.codUti;
       if (!opSummary[cod]) {
-        opSummary[cod] = { nombre: String(r.nomUti), count: 0, lastDate: '', netoTotal: 0 };
+        opSummary[cod] = { nombre: r.nomUti, count: 0, lastDate: '', netoTotal: 0 };
       }
       opSummary[cod].count++;
-      opSummary[cod].netoTotal += Number(r.tiempoNeto) || 0;
-      const date = r.createdAt ? String(r.createdAt) : '';
+      opSummary[cod].netoTotal += r.tiempoNeto || 0;
+      const date = r.createdAt ? r.createdAt.toISOString() : '';
       if (date > opSummary[cod].lastDate) opSummary[cod].lastDate = date.replace('T', ' ').substring(0, 19);
     }
 
