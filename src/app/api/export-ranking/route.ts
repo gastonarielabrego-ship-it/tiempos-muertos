@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import * as XLSX from 'xlsx';
 import { getDescansoMin, getTipoOperador } from '@/lib/operator-utils';
+import { fechaDayRange } from '@/lib/date-filter';
 
 const DEAD_TIME_THRESHOLD = 300;
 
@@ -40,7 +41,8 @@ export async function GET(request: NextRequest) {
     const zonaFilter = searchParams.get('zona');
 
     const where: Record<string, unknown> = {};
-    if (fechaFilter) where.fecha = fechaFilter;
+    const fechaRange = fechaDayRange(fechaFilter);
+    if (fechaRange) where.fecha = fechaRange;
 
     let scans = await db.scanRecord.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,

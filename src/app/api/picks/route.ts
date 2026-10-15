@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getDescansoSec, getTipoOperador } from '@/lib/operator-utils';
+import { fechaDayRange } from '@/lib/date-filter';
 
 type Turno = 'TM' | 'TT' | 'TN';
 
@@ -47,7 +48,8 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {};
     if (operator !== 'all') where.codUti = operator;
-    if (fechaFilter) where.fecha = fechaFilter;
+    const fechaRange = fechaDayRange(fechaFilter);
+    if (fechaRange) where.fecha = fechaRange;
 
     const allScans = await db.scanRecord.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
