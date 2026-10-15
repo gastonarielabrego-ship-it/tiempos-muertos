@@ -105,7 +105,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    gaps.sort((a, b) => b.gapSeconds - a.gapSeconds);
+    // Orden cronológico: por fecha y luego por hora de inicio del gap (prevHora),
+    // de inicio a fin de jornada. Mantiene el orden natural del turno de trabajo.
+    gaps.sort((a, b) => {
+      const dateCmp = a.fecha.localeCompare(b.fecha);
+      if (dateCmp !== 0) return dateCmp;
+      return a.prevHora.localeCompare(b.prevHora);
+    });
     gaps.forEach((g, i) => { g.rank = i + 1; });
 
     const total = gaps.length;

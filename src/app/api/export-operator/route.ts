@@ -107,7 +107,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    gaps.sort((a, b) => b.gapSeconds - a.gapSeconds);
+    // Orden cronológico: por fecha y luego por hora de inicio del gap (prevHora),
+    // de inicio a fin de jornada. Mantiene el orden natural del turno de trabajo.
+    gaps.sort((a, b) => {
+      const dateCmp = a.fecha.localeCompare(b.fecha);
+      if (dateCmp !== 0) return dateCmp;
+      return a.prevHora.localeCompare(b.prevHora);
+    });
     gaps.forEach((g, i) => { g.rank = i + 1; });
 
     const opName = allScans.length > 0 ? allScans[0].nomUti : operator;
@@ -122,7 +128,7 @@ export async function GET(request: NextRequest) {
     const descansoSec = diasSet.size * descansoPerDiaSec;
     const descansoReal = Math.min(descansoSec, brutoSec);
     const netoSec = brutoSec - descansoReal;
-    const maxGap = gaps.length > 0 ? gaps[0].gapSeconds : 0;
+    const maxGap = gaps.length > 0 ? Math.max(...gaps.map(g => g.gapSeconds)) : 0;
 
     // Build Excel workbook
     const wb = XLSX.utils.book_new();

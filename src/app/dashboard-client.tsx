@@ -1090,15 +1090,11 @@ export default function DashboardPage() {
                             </TableHeader>
                             <TableBody>
                               {gaps.map((row) => {
-                                const isTop3 = row.rank <= 3;
                                 const sameZone = row.prevZonSts === row.currZonSts;
                                 return (
-                                  <TableRow key={`${row.fecha}-${row.prevHora}-${row.currHora}`}
-                                    className={isTop3 ? 'bg-red-50 hover:bg-red-100/70' : ''}>
+                                  <TableRow key={`${row.fecha}-${row.prevHora}-${row.currHora}`}>
                                     <TableCell className="text-center">
-                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                                        isTop3 ? 'bg-red-500 text-white' : 'bg-slate-100 text-muted-foreground'
-                                      }`}>{row.rank}</span>
+                                      <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-slate-100 text-muted-foreground">{row.rank}</span>
                                     </TableCell>
                                     <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
                                     <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
@@ -1355,15 +1351,11 @@ export default function DashboardPage() {
                             </TableHeader>
                             <TableBody>
                               {stdGaps.map((row) => {
-                                const isTop3 = row.rank <= 3;
                                 const sameZone = row.prevZonSts === row.currZonSts;
                                 return (
-                                  <TableRow key={`std-${row.fecha}-${row.prevHora}-${row.currHora}`}
-                                    className={isTop3 ? 'bg-blue-50 hover:bg-blue-100/70' : ''}>
+                                  <TableRow key={`std-${row.fecha}-${row.prevHora}-${row.currHora}`}>
                                     <TableCell className="text-center">
-                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                                        isTop3 ? 'bg-blue-500 text-white' : 'bg-slate-100 text-muted-foreground'
-                                      }`}>{row.rank}</span>
+                                      <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-slate-100 text-muted-foreground">{row.rank}</span>
                                     </TableCell>
                                     <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
                                     <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
@@ -1620,15 +1612,11 @@ export default function DashboardPage() {
                             </TableHeader>
                             <TableBody>
                               {xdGaps.map((row) => {
-                                const isTop3 = row.rank <= 3;
                                 const sameZone = row.prevZonSts === row.currZonSts;
                                 return (
-                                  <TableRow key={`xd-${row.fecha}-${row.prevHora}-${row.currHora}`}
-                                    className={isTop3 ? 'bg-purple-50 hover:bg-purple-100/70' : ''}>
+                                  <TableRow key={`xd-${row.fecha}-${row.prevHora}-${row.currHora}`}>
                                     <TableCell className="text-center">
-                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                                        isTop3 ? 'bg-purple-500 text-white' : 'bg-slate-100 text-muted-foreground'
-                                      }`}>{row.rank}</span>
+                                      <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-slate-100 text-muted-foreground">{row.rank}</span>
                                     </TableCell>
                                     <TableCell className="text-xs whitespace-nowrap">{row.fecha}</TableCell>
                                     <TableCell className="text-center"><TurnoBadge turno={row.turno} /></TableCell>
