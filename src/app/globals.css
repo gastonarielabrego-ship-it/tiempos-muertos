@@ -133,10 +133,17 @@
     background: white !important;
     font-size: 11px;
   }
-  table {
-    page-break-inside: avoid;
-  }
+  /* Solo las filas individuales no deben partirse entre paginas.
+     Las tablas grandes (ej. lista de gaps en sanciones) DEBEN poder
+     fluir entre paginas; si les aplicamos page-break-inside: avoid
+     global, el navegador las mueve enteras a la pagina siguiente y
+     deja la seccion 'Evidencia del Caso' sin gaps en pagina 1. */
   tr {
     page-break-inside: avoid;
+  }
+  /* Utilitaria para tablas/bloques pequenos que SI deben evitar partirse */
+  .print-avoid-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 }

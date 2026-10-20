@@ -188,7 +188,7 @@ export default function SancionInicioForm() {
         </div>
 
         {/* TWO-COLUMN DATA TABLE */}
-        <div className="print:mx-[15mm] mb-4">
+        <div className="print:mx-[15mm] mb-4 print-avoid-break">
           <table className="w-full border-collapse text-[11px] print:text-[11pt]">
             <thead>
               <tr className="border-b-2 border-slate-800">
@@ -219,12 +219,16 @@ export default function SancionInicioForm() {
         {/* EVIDENCIA DEL CASO */}
         <div className="print:mx-[15mm] mb-4">
           <div className="border border-slate-400 rounded-sm">
+            {/* Cabecera + Incidencia: se mantienen juntos en pagina 1.
+                La tabla de picks (mas abajo) SI puede fluir entre paginas. */}
+            <div className="print-avoid-break">
             <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-400 flex items-center justify-between">
               <span className="text-[11px] font-bold print:text-[12pt]">Evidencia del Caso</span>
             </div>
             <div className="px-3 py-1.5 border-b border-slate-300">
               <p className="text-[11px] font-bold print:text-[11pt]">Incidencia Proceso Operaciones</p>
               <p className="text-[10px]" style={{ color: '#555' }}>Inicio tardio de jornada</p>
+            </div>
             </div>
 
             {/* Picks table - Screen */}
@@ -331,7 +335,7 @@ export default function SancionInicioForm() {
           <div className="mb-5"><TextSection label="Comentarios del Colaborador" id="comentColab" rows={5} headerColor="text-slate-800" /></div>
           <div className="mb-5"><TextSection label="Comentarios del Coordinador" id="comentCoord" rows={5} headerColor="text-slate-800" /></div>
           <div className="mb-6"><TextSection label="Sugerencias / Mejora / Compromiso" id="sugerencias" rows={4} headerColor="text-slate-800" /></div>
-          <div className="mt-10">
+          <div className="mt-10 print-avoid-break">
             <table className="w-full border-collapse text-[11px] print:text-[11pt]">
               <tbody>
                 <tr>

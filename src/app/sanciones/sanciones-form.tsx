@@ -306,7 +306,7 @@ export default function SancionesForm() {
         </div>
 
         {/* ─── TWO-COLUMN DATA TABLE ─── */}
-        <div className="print:mx-[15mm] mb-4">
+        <div className="print:mx-[15mm] mb-4 print-avoid-break">
           <table className="w-full border-collapse text-[11px] print:text-[11pt]">
             <thead>
               <tr className="border-b-2 border-slate-800">
@@ -397,6 +397,9 @@ export default function SancionesForm() {
         {/* ═══════════════════════════════════════════════════════════════════ */}
         <div className="print:mx-[15mm] mb-4">
           <div className="border border-slate-400 rounded-sm">
+            {/* Cabecera + Incidencia + Stats: se mantienen juntos en pagina 1.
+                La tabla de gaps (mas abajo) SI puede fluir entre paginas. */}
+            <div className="print-avoid-break">
             {/* Section header */}
             <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-400 flex items-center justify-between">
               <span className="text-[11px] font-bold print:text-[12pt]">Evidencia del Caso</span>
@@ -440,12 +443,15 @@ export default function SancionesForm() {
                 </div>
               </div>
             </div>
+            </div>
 
 
             {/* ─── SECTION B: Tiempos Muertos (Gaps) ─── */}
+            {/* Esta seccion NO tiene print-avoid-break: la tabla de gaps puede
+                tener muchas filas y debe poder fluir entre paginas. */}
             {gaps.length > 0 && (
             <div className="p-3">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-2 print-avoid-break">
                 <span className="text-[11px] font-bold print:text-[12pt] text-red-700">Tiempos Muertos</span>
               </div>
 
@@ -555,7 +561,7 @@ export default function SancionesForm() {
           </div>
 
           {/* ─── SIGNATURES ─── */}
-          <div className="mt-10">
+          <div className="mt-10 print-avoid-break">
             <table className="w-full border-collapse text-[11px] print:text-[11pt]">
               <tbody>
                 <tr>
